@@ -620,7 +620,8 @@ if __name__ == '__main__':
 
     state_tracker = StateTracker(args.state or f'{args.config}.state', restore=not args.do_not_resume)
 
-    signal.signal(signal.USR1, lambda: print_state(trainer.state(), sys.stderr))
+    # Make trainer listen to `kill -SIGUSR1 $PID` to print dataset progress
+    signal.signal(signal.SIGUSR1, lambda signum, handler: print_state(trainer.state(), sys.stderr))
 
     model_trainer = subprocess.Popen(
         args.trainer or config['trainer'],
