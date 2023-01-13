@@ -586,6 +586,12 @@ class StateTracker:
                 self._dump(trainer)
 
 
+def print_state(state:TrainerState, file:TextIO=sys.stdout):
+    print(f"[Trainer] At stage {state.stage}", file=file)
+    for name, reader in state.datasets.items():
+        print(f"[Trainer] Dataset {name}: overall epochs {reader.epoch: 3d}.{reader.line:010d}", file=file)
+
+
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description="Feeds marian tsv data for training.")
     parser.add_argument("--config", '-c', required=True, type=str, help='YML configuration input.')
@@ -611,6 +617,8 @@ if __name__ == '__main__':
     trainer = Trainer(curriculum, reader=DatasetReader if args.sync else AsyncDatasetReader, tmpdir=args.temporary_directory)
 
     state_tracker = StateTracker(args.state or f'{args.config}.state', restore=not args.do_not_resume)
+
+    signal.signal(signal.USR1, lambda: print_state(trainer.state(), sys.stderr))
 
     model_trainer = subprocess.Popen(
         args.trainer or config['trainer'],
