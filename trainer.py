@@ -577,6 +577,8 @@ class StateTracker:
 
         try:
             for batch in trainer.run(*args, **kwargs):
+                # TODO: Replace this with something that listens to Marian, and
+                # writes the state to disk after marian performed validation.
                 if self.dump and time.monotonic() - self._last_dump > self.timeout:
                     self._dump(trainer)
                 yield batch
