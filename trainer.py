@@ -630,47 +630,49 @@ if __name__ == '__main__':
     # Make trainer listen to `kill -SIGUSR1 $PID` to print dataset progress
     signal.signal(signal.SIGUSR1, lambda signum, handler: print_state(trainer.state(), sys.stderr))
 
-    model_trainer = subprocess.Popen(
-        args.trainer or config['trainer'],
-        stdin=subprocess.PIPE,
-        encoding="utf-8",
-        preexec_fn=ignore_sigint) # ignore_sigint makes marian ignore Ctrl-C. We'll stop it from here.
-    
-    assert model_trainer.stdin is not None
-
-    # TODO: This logic looks complicated, should be able to do this simpler. Three scenarios:
-    #   1. ctrl-c is pressed and trainer is told this is the end of the training data
-    #   2. ctrl-c is pressed and trainer has much training data in its buffers, ctrl-c needs to be
-    #      pressed again to tell trainer to really terminate. Just closing its stdin and waiting for
-    #      it to notice takes too long
-    #   3. trainer decides it has read enough and will train no longer. This is the BrokenPipeError
-    #      scenario. We don't need to deal with multiple levels of terminating the trainer because
-    #      the trainer is already dead at this point.
-    try:
-        try:
-            for batch in state_tracker.run(trainer):
-                model_trainer.stdin.writelines(batch)
-        except KeyboardInterrupt:
-            print("[Trainer] Ctrl-c pressed, stopping training")
-
-        # Levels of waiting for the trainer. This is reached either because we ran out of batches
-        # or because ctrl-c was pressed. Pressing ctrl-c more advances to next level of aggressiveness.
-        for stage in ['exit', 'terminate', 'kill']:
-            try:
-                if stage == 'exit':
-                    model_trainer.stdin.close()
-                elif stage == 'terminate':
-                    model_trainer.terminate()
-                else:
-                    model_trainer.kill()
+    while trainer.stage is not None:
+        model_trainer = subprocess.Popen(
+            args.trainer or config['trainer'],
+            stdin=subprocess.PIPE,
+            encoding="utf-8",
+            preexec_fn=ignore_sigint) # ignore_sigint makes marian ignore Ctrl-C. We'll stop it from here.
         
-                print(f"[Trainer] waiting for trainer to {stage}. Press ctrl-c to be more aggressive")
-                sys.exit(model_trainer.wait()) # blocking
+        assert model_trainer.stdin is not None
+    
+        try:
+            try:
+                for batch in state_tracker.run(trainer):
+                    model_trainer.stdin.writelines(batch)
             except KeyboardInterrupt:
-                continue
-    except BrokenPipeError:
-        # BrokenPipeError is thrown by writelines() or close() and indicates that the child trainer
-        # process is no more. We can safely retrieve its return code and exit with that, it should
-        # not block at this point.
-        print("[Trainer] trainer stopped reading input")
-        sys.exit(model_trainer.wait())
+                print("[Trainer] Ctrl-c pressed, stopping training")
+
+            # Levels of waiting for the trainer. This is reached either because we ran out of batches
+            # or because ctrl-c was pressed. Pressing ctrl-c more advances to next level of aggressiveness.
+            for stage in ['exit', 'terminate', 'kill']:
+                try:
+                    if stage == 'exit':
+                        model_trainer.stdin.close()
+                    elif stage == 'terminate':
+                        model_trainer.terminate()
+                    else:
+                        model_trainer.kill()
+            
+                    print(f"[Trainer] waiting for trainer to {stage}. Press ctrl-c to be more aggressive")
+                    sys.exit(model_trainer.wait()) # blocking
+                except KeyboardInterrupt:
+                    continue
+        except BrokenPipeError:
+            # BrokenPipeError is thrown by writelines() or close() and indicates that the child trainer
+            # process is no more. We can safely retrieve its return code and exit with that, it should
+            # not block at this point.
+            print("[Trainer] trainer stopped reading input")
+            retval = model_trainer.wait()
+            if retval != 0:
+                print(f"[Trainer] trainer stopped with non-zero exit code: {retval}")
+                sys.exit(retval)
+
+            # If the trainer exited cleanly, I'm assuming it stalled. If that's the case, we're
+            # moving to the next stage and restart training! Yay! This way you can use `inf` to
+            # just train a stage until it stalls. No idea whether that's a good idea but that's why
+            # this code is in an experimental branch.
+            trainer.next_stage()
