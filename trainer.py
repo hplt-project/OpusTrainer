@@ -503,7 +503,15 @@ class Trainer:
             reader.close()
         self.readers = {}
 
-    def run(self, *, batch_size=100):
+    def next_stage(self) -> Optional[Stage]:
+        """Move to the next stage. Will return this next stage or None if there is no next stage."""
+        self.stage = self.curriculum.next_stage(self.stage)
+        if self.stage is not None:
+            self.epoch_tracker = EpochTracker(self.readers[self.stage.until_dataset])
+        return self.stage
+
+    def run(self, *, batch_size:int=100) -> Iterable[List[str]]:
+        """Yield batches, moving through the stages of training as datasets are consumed."""
         while self.stage is not None:
             print(f"[Trainer] Starting stage {self.stage.name}")
             while self.stage.until_epoch is None or self.epoch_tracker.epoch < self.stage.until_epoch:
@@ -528,9 +536,8 @@ class Trainer:
                 yield batch
 
             # Move onto next stage. May be `None`, which would end this generator 🎉
-            self.stage = self.curriculum.next_stage(self.stage)
-            if self.stage:
-                self.epoch_tracker = EpochTracker(self.readers[self.stage.until_dataset])
+            self.next_stage()
+                
 
 
 class StateTracker:
