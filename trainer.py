@@ -506,7 +506,7 @@ class Trainer:
     def run(self, *, batch_size=100):
         while self.stage is not None:
             print(f"[Trainer] Starting stage {self.stage.name}")
-            while self.stage.until_epoch is not None and self.epoch_tracker.epoch < self.stage.until_epoch:
+            while self.stage.until_epoch is None or self.epoch_tracker.epoch < self.stage.until_epoch:
                 batch: List[str] = []
 
                 # Read from each dataset according to its weight in this stage
