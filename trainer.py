@@ -11,7 +11,7 @@ import subprocess
 import time
 
 from dataclasses import dataclass
-from typing import List, Tuple, Dict, Any, Optional, Union, Type, TextIO, cast
+from typing import List, Tuple, Dict, Any, Optional, Union, Type, TextIO, cast, Iterable
 from tempfile import TemporaryFile
 from itertools import islice
 
