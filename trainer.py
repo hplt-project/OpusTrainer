@@ -547,7 +547,7 @@ class StateTracker:
     dump: bool
     restore: bool
 
-    def __init__(self, path:str, *, loader:StateLoader=StateLoader(), restore:bool=True, dump:bool=True, timeout=60):
+    def __init__(self, path:str, *, loader:StateLoader=StateLoader(), timeout=60):
         """
         Parameters
         --–-------
@@ -555,44 +555,35 @@ class StateTracker:
             Path to state file
         loader : type, optional
             Loader class for encoding/decoding the state file
-        restore : bool, optional
-            Whether to restore the state if the state file currently exists (default is True)
-        dump : bool, optional
-            Whether to dump the state to the file after training (default is True)
         timeout : int, optional
             Minimum number of seconds between state dumps
         """
         self.path = path
         self.loader = loader
-        self.dump = dump
-        self.restore = restore
         self.timeout = timeout
         self._last_dump = 0
 
-    def _restore(self, trainer:Trainer):
+    def restore(self, trainer:Trainer):
         with open(self.path, 'r', encoding='utf-8') as fh:
             return trainer.restore(self.loader.load(fh))
 
-    def _dump(self, trainer:Trainer):
+    def dump(self, trainer:Trainer):
         with open(self.path, 'w', encoding='utf-8') as fh:
             return self.loader.dump(trainer.state(), fh)
         self._last_dump = time.monotonic()
 
     def run(self, trainer:Trainer, *args, **kwargs):
-        if self.restore and os.path.exists(self.path):
-            self._restore(trainer)
-
+        """Wraps trainer.run() and dumps its state to disk from time to time."""
         try:
             for batch in trainer.run(*args, **kwargs):
                 # TODO: Replace this with something that listens to Marian, and
                 # writes the state to disk after marian performed validation.
-                if self.dump and time.monotonic() - self._last_dump > self.timeout:
+                if time.monotonic() - self._last_dump > self.timeout:
                     self._dump(trainer)
                 yield batch
         finally:
             # Dump on clean exit as well as on exception.
-            if self.dump:
-                self._dump(trainer)
+            self._dump(trainer)
 
 
 def print_state(state:TrainerState, file:TextIO=sys.stdout):
@@ -625,7 +616,13 @@ if __name__ == '__main__':
 
     trainer = Trainer(curriculum, reader=DatasetReader if args.sync else AsyncDatasetReader, tmpdir=args.temporary_directory)
 
-    state_tracker = StateTracker(args.state or f'{args.config}.state', restore=not args.do_not_resume)
+    state_tracker = StateTracker(args.state or f'{args.config}.state')
+
+    if not args.do_not_resume:
+        try:
+            state_tracker.restore(trainer)
+        except FileNotFoundError:
+            pass
 
     # Make trainer listen to `kill -SIGUSR1 $PID` to print dataset progress
     signal.signal(signal.SIGUSR1, lambda signum, handler: print_state(trainer.state(), sys.stderr))
