@@ -579,11 +579,11 @@ class StateTracker:
                 # TODO: Replace this with something that listens to Marian, and
                 # writes the state to disk after marian performed validation.
                 if time.monotonic() - self._last_dump > self.timeout:
-                    self._dump(trainer)
+                    self.dump(trainer)
                 yield batch
         finally:
             # Dump on clean exit as well as on exception.
-            self._dump(trainer)
+            self.dump(trainer)
 
 
 def print_state(state:TrainerState, file:TextIO=sys.stdout):
