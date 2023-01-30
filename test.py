@@ -171,3 +171,34 @@ class TestTrainer(unittest.TestCase):
 				batches.extend(state_tracker.run(trainer2))
 			
 		self.assertEqual(batches, batches_ref)
+
+	def test_next_stage(self):
+		config = {
+			'datasets': {
+				'clean': 'test/data/clean',
+				'medium': 'test/data/medium',
+			},
+			'stages': [
+				'start',
+				'mid',
+			],
+			'start': [
+				'clean 1.0',
+				'until clean inf'
+			],
+			'mid': [
+				'medium 1.0',
+				'until medium inf',
+			],
+			'seed': 1111
+		}
+
+		curriculum = CurriculumLoader().load(config)
+
+		# Reference batches (trainer runs without resuming)
+		with closing(Trainer(curriculum)) as trainer:
+			self.assertEqual(trainer.stage.name, 'start')
+			trainer.next_stage()
+			self.assertEqual(trainer.stage.name, 'mid')
+			trainer.next_stage()
+			self.assertIsNone(trainer.stage)
