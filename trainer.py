@@ -2,6 +2,7 @@
 """A translation model trainer. It feeds marian different sets of datasets with different thresholds
 for different stages of the training. Data is uncompressed and TSV formatted src\ttrg
 """
+from ctypes import alignment
 import os
 import sys
 import signal
@@ -11,9 +12,12 @@ import subprocess
 import time
 
 from dataclasses import dataclass
-from typing import List, Tuple, Dict, Any, Optional, Union, Type, TextIO, cast, Iterable
+from enum import Enum
+from typing import List, Tuple, Dict, Set, Any, Optional, Union, Type, TextIO, cast, Iterable
 from tempfile import TemporaryFile
 from itertools import islice
+
+from sacremoses import MosesDetokenizer
 
 import yaml
 
@@ -24,16 +28,105 @@ def ignore_sigint():
     """
     signal.signal(signal.SIGINT, signal.SIG_IGN)
 
+# Placeholders, the Chinese edition, with some hardcoded values
+
+md = MosesDetokenizer(lang='zh')
+
+def get_placeholding_candidates(align_line: str) -> List[Tuple[int, int]]:
+    """Filters out multiple alignment targets so that we can definitely get a one-to-one replacement"""
+    def tuplify(pair: str) -> Tuple[int, int]:
+        s, t = pair.split('-')
+        return (int(s), int(t))
+    # Create the two src-trg and trg-src sets
+    src_trg: List[Tuple[int, int]] = [tuplify(i) for i in align_line.split()]
+    trg_src: List[Tuple[int, int]] = [(c, d) for d,c in src_trg]
+    # Sort them
+    src_trg.sort(key=lambda x: x[0])
+    trg_src.sort(key=lambda x: x[0])
+    # Remove anything that is found multiple times. Anything that is found multiple times means non bijective alignment
+    # Since they are sorted, we can reduce some time complexity
+    def filter_tuples(inlist: List[Tuple[int, int]]) -> List[Tuple[int, int]]:
+        '''Removes places non x->y x->z type of alignments'''
+        new_list: List[Tuple[int, int]] = []
+        blacklisted: Set = set()
+        for i in range(len(inlist)):
+            curr: int = inlist[i][0]
+            if curr not in blacklisted:
+                if i < len(inlist) - 1:
+                    peek: int = inlist[i+1][0]
+                    if curr==peek:
+                        blacklisted.add(curr)
+                    else:
+                        new_list.append(inlist[i])
+                else:
+                    new_list.append(inlist[i])
+        return new_list
+
+    src_trg_filtered: List[Tuple[int, int]] = filter_tuples(src_trg)
+    trg_src_filtered: List[Tuple[int, int]] = filter_tuples(trg_src)
+
+    # Now, we are looking for the union of the two.
+    # First, reverse src_trg
+    trg_src_filtered_rereversed: List[Tuple[int, int]] = [(c, d) for d,c in trg_src_filtered]
+
+    # Now convert both to sets and take the union
+    src_trg_set: Set[Tuple[int, int]] = set(src_trg_filtered)
+    trg_src_filtered_rereversed_set: Set[Tuple[int, int]] = set(trg_src_filtered_rereversed)
+
+    return list(src_trg_set & trg_src_filtered_rereversed_set)
+
+# Unpacks a line, removes the alignments, and applies placeholding. Hardcoded for the moment
+# Also applies detokenization on the source side, because getting word alignments for Chinese is otherwise hard
+
+def placehold_line(line: str, prob: bool) -> str:
+    '''Applies placeholders to words in a line, and then removes the alignment info from the line'''
+    src, trg, alignment = line.strip().split('\t')
+    source = src.split(' ')
+    target = trg.split(' ')
+
+    # Get replacement candidates
+    candidates: List[Tuple[int, int]] = get_placeholding_candidates(alignment)
+
+    # Get list of possible tags. Hardcode for now
+    tags: List[str] = ["0", "1", "2", "3", "4", "5"]
+    # Shuffle the list. It's quite slow, but we only have 6 elements so it should be fine
+    # For more information https://stackoverflow.com/questions/10048069/what-is-the-most-pythonic-way-to-pop-a-random-element-from-a-list
+    random.shuffle(tags)
+
+    # Replace each of them with a THRESHOLD probability unless the two words are exactly the same
+    # This is to avoid having numbers trained with placeholders or any other words that are exactly the same
+    for i in range(len(candidates)):
+        if source[candidates[i][0]] != target[candidates[i][1]] and  random.random() < prob:
+            # Try to get a tag if available and tag our data
+            if len(tags) > 0:
+                tag_id = tags.pop()
+                source[candidates[i][0]] = source[candidates[i][0]] + " <tag" + tag_id + "> " + target[candidates[i][1]] + " </tag" + tag_id + ">"
+            else:
+                # We run out of tags so no point of trying to tag anything else
+                break
+
+    # Hardcoded for now. The source is Chinese
+    source_detok: str = md.detokenize(" ".join(source))
+
+    # Return the sentence, source tagged a la Dinu et al, target as it is and no alignment info
+    return  source_detok + "\t" + trg
+
+# End of placeholding code:
+
 # Path to something that can shuffle data. Called with seed, output-path, input-files
 # TODO: Ideally this also deduplicates the src side of the sentence pairs it shuffles ;)
 PATH_TO_SHUFFLE = os.path.dirname(os.path.realpath(__file__)) + "/shuffle.py"
 
 # Available batch modifiers
-MODIFIERS = {
-    'uppercase': lambda line: line.upper(),
-    'titlecase': lambda line: ' '.join([word[0].upper() + word[1:] for word in line.split()]),
-}
+class ModifierType(Enum):
+    BATCH = 0
+    SENTENCE = 1
 
+MODIFIERS = {
+    'uppercase': (ModifierType.BATCH, lambda line: line.upper()),
+    'titlecase': (ModifierType.BATCH, lambda line: ' '.join([word[0].upper() + word[1:] for word in line.split()])),
+    'chinese_placeholder': (ModifierType.SENTENCE, placehold_line)
+}
 
 @dataclass(frozen=True)
 class Dataset:
@@ -522,12 +615,15 @@ class Trainer:
                 for dataset, weight in self.stage.datasets:
                     batch.extend(islice(self.readers[dataset.name], 0, int(batch_size * weight)))
 
-                # Apply any modifiers to random lines in the batch
+                # Apply any modifiers to random lines in the batch, or sentence
                 # (Multiple modifiers could be applied to the same line!)
                 # TODO: maybe make this self.stage.modifiers? Would that make sense?
                 for modifier in self.curriculum.modifiers:
-                    modifier_fun = MODIFIERS[modifier.name]
-                    batch = [modifier_fun(line.rstrip('\n')) + '\n' if modifier.frequency > random.random() else line for line in batch]
+                    modifier_type, modifier_fun = MODIFIERS[modifier.name]
+                    if modifier_type == ModifierType.BATCH:
+                        batch = [modifier_fun(line.rstrip('\n')) + '\n' if modifier.frequency > random.random() else line for line in batch]
+                    elif modifier_type == ModifierType.SENTENCE:
+                        batch = [modifier_fun(line.rstrip('\n'), modifier.frequency) + '\n' for line in batch]
 
                 random.shuffle(batch)
 
