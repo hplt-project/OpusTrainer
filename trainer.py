@@ -29,9 +29,17 @@ def ignore_sigint():
 PATH_TO_SHUFFLE = os.path.dirname(os.path.realpath(__file__)) + "/shuffle.py"
 
 # Available batch modifiers
+def apply_titlecase(line: str) -> str:
+    """Applies titlecase to a sentence. Beware of tabs as src and trg separator
+    """
+    sections: List[str] = line.split('\t')
+    for i in range(len(sections)):
+        sections[i] = ' '.join([word[0].upper() + word[1:] for word in sections[i].split()])
+    return '\t'.join(sections)
+
 MODIFIERS = {
     'uppercase': lambda line: line.upper(),
-    'titlecase': lambda line: ' '.join([word[0].upper() + word[1:] for word in line.split()]),
+    'titlecase': apply_titlecase,
 }
 
 
@@ -40,7 +48,7 @@ class Dataset:
     name: str
     files: List[str]
 
-    
+
 @dataclass(frozen=True)
 class DatasetState:
     seed: int
@@ -140,7 +148,7 @@ class DatasetReader:
 
         self.seed = state.seed
         self.epoch = state.epoch
-        
+
         # Skip forward
         for _ in range(state.line):
             next(self)
@@ -256,7 +264,7 @@ class AsyncDatasetReader(DatasetReader):
         # Assume shuffling has started
         assert self._pending is not None
         assert self._pending.seed == self.seed
-        
+
         # Wait for that to finish (hopefully it already has since it was likely
         # started last iteration)
         self._pending.proc.wait()
@@ -266,7 +274,7 @@ class AsyncDatasetReader(DatasetReader):
         assert self._fh is None or self._fh.closed
         self._fh = self._pending.file
         self._pending = None
-        
+
         # Make sure we start reading from the start again
         self._fh.seek(0)
         self.line = 0
@@ -535,9 +543,8 @@ class Trainer:
                 # TODO: Yield something useful, e.g. progress.
                 yield batch
 
-            # Move onto next stage. May be `None`, which would end this generator 🎉
+            # Move onto next stage. May be `None`, which would end this generator
             self.next_stage()
-                
 
 
 class StateTracker:
@@ -609,7 +616,7 @@ if __name__ == '__main__':
     parser.add_argument("--temporary-directory", '-T', default=None, type=str, help='Temporary dir, used for shuffling and tracking state')
     parser.add_argument("--do-not-resume", '-d', action="store_true", help='Do not resume from the previous training state')
     parser.add_argument("trainer", type=str, nargs=argparse.REMAINDER, help="Trainer program that gets fed the input. If empty it is read from config.")
-    
+
     args = parser.parse_args()
 
     with open(args.config, 'r', encoding='utf-8') as fh:
@@ -635,7 +642,7 @@ if __name__ == '__main__':
         stdin=subprocess.PIPE,
         encoding="utf-8",
         preexec_fn=ignore_sigint) # ignore_sigint makes marian ignore Ctrl-C. We'll stop it from here.
-    
+
     assert model_trainer.stdin is not None
 
     # TODO: This logic looks complicated, should be able to do this simpler. Three scenarios:
@@ -663,7 +670,7 @@ if __name__ == '__main__':
                     model_trainer.terminate()
                 else:
                     model_trainer.kill()
-        
+
                 print(f"[Trainer] waiting for trainer to {stage}. Press ctrl-c to be more aggressive")
                 sys.exit(model_trainer.wait()) # blocking
             except KeyboardInterrupt:
