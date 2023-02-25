@@ -106,7 +106,8 @@ def placehold_line(line: str, prob: bool) -> str:
                 break
 
     # Hardcoded for now. The source is Chinese
-    source_detok: str = md.detokenize(" ".join(source))
+    # source_detok: str = " ".join(source) # The detokenizer acts on lists, not strings
+    source_detok: str = md.detokenize(source)
 
     # Return the sentence, source tagged a la Dinu et al, target as it is and no alignment info
     return  source_detok + "\t" + trg
