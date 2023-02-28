@@ -78,8 +78,11 @@ def get_placeholding_candidates(align_line: str) -> List[Tuple[int, int]]:
 # Unpacks a line, removes the alignments, and applies placeholding. Hardcoded for the moment
 # Also applies detokenization on the source side, because getting word alignments for Chinese is otherwise hard
 
-def placehold_line(line: str, prob: bool) -> str:
-    '''Applies placeholders to words in a line, and then removes the alignment info from the line'''
+def tag_line(line: str, *, probability: float=0.0, num_tags: int=6, chinese: bool=None) -> str:
+    '''Applies tag to words in a line based on alignment info, and then removes the alignment info from the line.
+       This is used to enable terminology support by tagging random words with their translation.
+       eg "I like cake" would become "I like <tag0> gusta </tag0> cake"
+    '''
     src, trg, alignment = line.strip().split('\t')
     source = src.split(' ')
     target = trg.split(' ')
@@ -88,7 +91,7 @@ def placehold_line(line: str, prob: bool) -> str:
     candidates: List[Tuple[int, int]] = get_placeholding_candidates(alignment)
 
     # Get list of possible tags. Hardcode for now
-    tags: List[str] = ["0", "1", "2", "3", "4", "5"]
+    tags: List[str] = [str(x) for x in range(num_tags)]
     # Shuffle the list. It's quite slow, but we only have 6 elements so it should be fine
     # For more information https://stackoverflow.com/questions/10048069/what-is-the-most-pythonic-way-to-pop-a-random-element-from-a-list
     random.shuffle(tags)
@@ -96,7 +99,7 @@ def placehold_line(line: str, prob: bool) -> str:
     # Replace each of them with a THRESHOLD probability unless the two words are exactly the same
     # This is to avoid having numbers trained with placeholders or any other words that are exactly the same
     for i in range(len(candidates)):
-        if source[candidates[i][0]] != target[candidates[i][1]] and  random.random() < prob:
+        if source[candidates[i][0]] != target[candidates[i][1]] and  random.random() < probability:
             # Try to get a tag if available and tag our data
             if len(tags) > 0:
                 tag_id = tags.pop()
@@ -105,9 +108,15 @@ def placehold_line(line: str, prob: bool) -> str:
                 # We run out of tags so no point of trying to tag anything else
                 break
 
-    # Hardcoded for now. The source is Chinese
-    # source_detok: str = " ".join(source) # The detokenizer acts on lists, not strings
-    source_detok: str = md.detokenize(source)
+    # Special case for Chinese src
+    if chinese == 'src':
+        source_detok: str = md.detokenize(source)
+    else:
+        source_detok: str = " ".join(source) # The detokenizer acts on lists, not strings
+
+    # Special case for Chinese trg
+    if chinese == 'trg':
+        trg = md.detokenize(target)
 
     # Return the sentence, source tagged a la Dinu et al, target as it is and no alignment info
     return  source_detok + "\t" + trg
@@ -134,7 +143,7 @@ class ModifierType(Enum):
 MODIFIERS = {
     'uppercase': (ModifierType.BATCH, lambda line: line.upper()),
     'titlecase': (ModifierType.BATCH, apply_titlecase),
-    'chinese_placeholder': (ModifierType.SENTENCE, placehold_line)
+    'tags': (ModifierType.SENTENCE, tag_line)
 }
 
 @dataclass(frozen=True)
@@ -161,7 +170,7 @@ class Stage:
 @dataclass(frozen=True)
 class Modifier:
     name: str
-    frequency: float
+    settings: Dict[str, Any]
 
     def __post_init__(self):
         if self.name not in MODIFIERS:
@@ -488,8 +497,10 @@ class CurriculumV1Loader:
         """Reads
         ```yml
         modifiers:
-          - uppercase 0.05
-          - titlecase 0.05
+          - uppercase:
+            - probability: 0.05
+          - titlecase:
+            - probability: 0.05
         ```
         """
         return [
@@ -497,9 +508,13 @@ class CurriculumV1Loader:
             for modifier_line in ymldata.get('modifiers', [])
         ]
 
-    def _load_modifier(self, line:str) -> Modifier:
-        name, frequency = line.split()
-        return Modifier(name, float(frequency))
+    def _load_modifier(self, modifier_line: Dict[str, List[Dict[str, Any]]]) -> Modifier:
+        name = list(modifier_line.keys())[0]
+        myparams: Dict[str, Any] = {}
+        for parameter_pairs in modifier_line[name]:
+            for key, value in parameter_pairs.items():
+                myparams[key] = value
+        return Modifier(name, myparams)
 
 
 class CurriculumLoader:
@@ -630,9 +645,9 @@ class Trainer:
                 for modifier in self.curriculum.modifiers:
                     modifier_type, modifier_fun = MODIFIERS[modifier.name]
                     if modifier_type == ModifierType.BATCH:
-                        batch = [modifier_fun(line.rstrip('\n')) + '\n' if modifier.frequency > random.random() else line for line in batch]
+                        batch = [modifier_fun(line.rstrip('\n')) + '\n' if modifier.settings['probability'] > random.random() else line for line in batch]
                     elif modifier_type == ModifierType.SENTENCE:
-                        batch = [modifier_fun(line.rstrip('\n'), modifier.frequency) + '\n' for line in batch]
+                        batch = [modifier_fun(line.rstrip('\n'), **modifier.settings) + '\n' for line in batch]
 
                 random.shuffle(batch)
 
