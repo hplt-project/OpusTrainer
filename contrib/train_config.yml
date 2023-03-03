@@ -1,8 +1,8 @@
 # Datasets are already TSV files
 datasets:
-  clean: test/data/clean
-  medium: test/data/medium
-  dirty: test/data/dirty
+  clean: test-data/clean
+  medium: test-data/medium
+  dirty: test-data/dirty
 
 stages:
   - start
