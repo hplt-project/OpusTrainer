@@ -28,8 +28,14 @@ end:
   - until dirty 5 # use `inf` to mean until forever
 
 modifiers:
-  - uppercase 0.05
-  - titlecase 0.05
+  - uppercase:
+    - probability: 0.05
+  - titlecase:
+    - probability: 0.05
+  #- tags: # Requires dataset augmented with alignment info
+  #  - probability: 0.08
+  #  - num_tags: 6
+  #  - chinese: true
 
 seed: 1111
-trainer: /home/dheart/uni_stuff/postdoc/empty-train/trainer/test.py
+trainer: /usr/bin/cat
