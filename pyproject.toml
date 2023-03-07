@@ -1,0 +1,30 @@
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "opustrainer"
+version = "0.1"
+authors = [
+  { name="Jelmer van der Linde", email="jelmer.vanderlinde@ed.ac.uk" },
+]
+description = "Scheduled training for machine translation systems"
+readme = "README.md"
+requires-python = ">=3.7"
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: OS Independent",
+]
+dependencies = [
+    "PyYAML==6.0"
+]
+
+[project.scripts]
+opustrainer-train = "opustrainer.trainer:main"
+opustrainer-shuffle = "opustrainer.shuffle:main"
+
+[project.urls]
+"Homepage" = "https://github.com/hplt-project/OpusTrainer"
+"Bug Tracker" = "https://github.com/hplt-project/OpusTrainer/issues"
+

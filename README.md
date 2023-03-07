@@ -1,7 +1,22 @@
-# Trainer
+# OpusTrainer
 The purpose of the trainer is to provide the user with a flexible way of scheduling various sources of input data, as well as augment the training data with tittle casing, all caps, etc. This is particularly useful when you have multiple data sources and you want to pretrain the model first on backtranslated data, gradually add other sources of data, and finally fine tune, all in one go.
 
 Alternatively, this tool is particularly suited to training multilingual models, as it provides an easy way to define the desired mixture of datasets from different language sources.
+
+## Installation
+You've got two options: Install directly from PyPI:
+
+```sh
+pip install opustrainer
+```
+
+or clone this repository, and install it in editable mode so you can change the source, but still use all the commands:
+
+```sh
+git clone git@github.com:hplt-project/opustrainer.git
+cd opustrainer
+pip install -e .
+```
 
 ## Configuration file
 Define your training process via a configuration file. You define the datasets on top, the stages and then for each stage a mixing criteria and a stage termination criteria. An example configuration file is provided below. The path to the `trainer` is a path to any neural network trainer that supports having stdin as training input format.
@@ -78,7 +93,7 @@ To use the placeholder code augment your training data with placeholders before 
 # train vocabulary
 spm_train --bos_id=-1 --eos_id=0 --unk_id=1 --user_defined_symbols_file my_placeholders \
   --model_prefix="test/vocab.bgen" --vocab_size=12000 \
-  --input="/home/dheart/uni_stuff/postdoc/empty-train/trainer/test/data/clean.bgen" \
+  --input="/path/to/data/clean.bgen" \
   --shuffle_input_sentence=true --character_coverage 1
 
 # Move vocabulary to the new location
@@ -91,7 +106,7 @@ done
 ```
 You need to augment the training configuration with additional placeholder configuration setting:
 ```yml
-vocab: /home/dheart/uni_stuff/postdoc/empty-train/trainer/test/vocab.bgen.spm
+vocab: /path/to/vocab.bgen.spm
 placeholder-symbol: "<PLACEHOLDER>"
 num-placeholders: 4
 regexes:
@@ -100,6 +115,7 @@ regexes:
     - ([a-zA-Z0-9_.+-]+@[a-zA-Z0-9-]+\.[a-zA-Z0-9-.]+)
 ```
 After vocabulary is trained and data is preprocessed, proceed with a normal training run.
+
 ## Future work
 
 - Terminology support (using a dictionary). We should augment the training data with terminology (possibly stemmed on the source side) so that we can use it real world models
