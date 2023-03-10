@@ -78,7 +78,7 @@ def get_placeholding_candidates(align_line: str) -> List[Tuple[int, int]]:
 # Unpacks a line, removes the alignments, and applies placeholding. Hardcoded for the moment
 # Also applies detokenization on the source side, because getting word alignments for Chinese is otherwise hard
 
-def tag_line(line: str, *, probability: float=0.0, num_tags: int=6, chinese: bool=None) -> str:
+def tag_line(line: str, *, probability: float=0.0, num_tags: int=6, chinese: str=None) -> str:
     '''Applies tag to words in a line based on alignment info, and then removes the alignment info from the line.
        This is used to enable terminology support by tagging random words with their translation.
        eg "I like cake" would become "I like <tag0> gusta </tag0> cake"
