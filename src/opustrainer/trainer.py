@@ -13,7 +13,7 @@ import time
 
 from dataclasses import dataclass
 from enum import Enum
-from typing import List, Tuple, Dict, Set, Any, Optional, Union, Type, TextIO, cast, Iterable
+from typing import List, Tuple, Dict, Set, Any, Optional, Union, Type, TextIO, cast, Iterable, Literal
 from tempfile import TemporaryFile
 from itertools import islice
 
@@ -48,7 +48,7 @@ def get_placeholding_candidates(align_line: str) -> List[Tuple[int, int]]:
     def filter_tuples(inlist: List[Tuple[int, int]]) -> List[Tuple[int, int]]:
         '''Removes places non x->y x->z type of alignments'''
         new_list: List[Tuple[int, int]] = []
-        blacklisted: Set = set()
+        blacklisted: Set[int] = set()
         for i in range(len(inlist)):
             curr: int = inlist[i][0]
             if curr not in blacklisted:
@@ -78,7 +78,7 @@ def get_placeholding_candidates(align_line: str) -> List[Tuple[int, int]]:
 # Unpacks a line, removes the alignments, and applies placeholding. Hardcoded for the moment
 # Also applies detokenization on the source side, because getting word alignments for Chinese is otherwise hard
 
-def tag_line(line: str, *, probability: float=0.0, num_tags: int=6, chinese: str=None) -> str:
+def tag_line(line: str, *, probability: float=0.0, num_tags: int=6, chinese: Optional[Literal['src', 'trg']] = None) -> str:
     '''Applies tag to words in a line based on alignment info, and then removes the alignment info from the line.
        This is used to enable terminology support by tagging random words with their translation.
        eg "I like cake" would become "I like <tag0> gusta </tag0> cake"

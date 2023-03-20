@@ -3,6 +3,8 @@
 import sys
 sys.path.append("../src/opustrainer")
 
+import random
+
 from typing import IO, Type
 from collections import Counter
 from contextlib import closing
@@ -10,7 +12,7 @@ import unittest
 import tempfile
 import os
 
-from trainer import Dataset, DatasetReader, AsyncDatasetReader, CurriculumLoader, Trainer, StateTracker
+from trainer import Dataset, DatasetReader, AsyncDatasetReader, CurriculumLoader, Trainer, StateTracker, tag_line
 
 TEST_FILE: str
 
@@ -176,6 +178,38 @@ class TestTrainer(unittest.TestCase):
 				batches.extend(state_tracker.run(trainer2))
 			
 		self.assertEqual(batches, batches_ref)
+
+class TestTagger(unittest.TestCase):
+	def test_tagger_zh_src(self):
+		'''Tests the tagger with zh on the source side'''
+		random.seed(1)
+		with open('../contrib/test-data/clean.zhen.10', 'r', encoding='utf-8') as myinput:
+			with open('../contrib/test-data/clean.zhen.ref.06.4.src', 'r', encoding='utf-8') as reference:
+				for line in myinput:
+					test = tag_line(line, probability=0.6, num_tags=4, chinese='src')
+					ref = reference.readline()[:-1]
+					self.assertEqual(test, ref)
+	
+	def test_tagger_zh_trg(self):
+		'''Tests the tagger with zh on the target side'''
+		random.seed(1)
+		with open('../contrib/test-data/clean.enzh.10', 'r', encoding='utf-8') as myinput:
+			with open('../contrib/test-data/clean.enzh.ref.06.4.trg', 'r', encoding='utf-8') as reference:
+				for line in myinput:
+					test = tag_line(line, probability=0.6, num_tags=4, chinese='trg')
+					ref = reference.readline()[:-1]
+					self.assertEqual(test, ref)
+
+	def test_tagger_no_zh(self):
+		'''Tests the tagger with zh on the or target'''
+		random.seed(1)
+		with open('../contrib/test-data/clean.enzh.10', 'r', encoding='utf-8') as myinput:
+			with open('../contrib/test-data/clean.enzh.ref.06.4.none', 'r', encoding='utf-8') as reference:
+				for line in myinput:
+					test = tag_line(line, probability=0.6, num_tags=4, chinese=None)
+					ref = reference.readline()[:-1]
+					self.assertEqual(test, ref)
+
 
 if __name__ == "__main__":
     unittest.main()

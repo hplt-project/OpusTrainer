@@ -23,6 +23,7 @@ jobs:
         with:
           name: sdist
           path: dist/opuscleaner-*.tar.gz
+    fail-fast: false
 
   build_wheels:
     name: Build wheels
@@ -51,6 +52,7 @@ jobs:
         with:
           name: wheels
           path: ./wheelhouse/opuscleaner-*.whl
+    fail-fast: false
 
   upload_pypi:
     needs: [build_wheels, build_sdist]
