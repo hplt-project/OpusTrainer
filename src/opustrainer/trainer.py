@@ -714,13 +714,13 @@ class StateTracker:
                 self._dump(trainer)
 
 
-def print_state(state:TrainerState, file:TextIO=sys.stdout):
+def print_state(state:TrainerState, file:TextIO=sys.stdout) -> None:
     print(f"[Trainer] At stage {state.stage}", file=file)
     for name, reader in state.datasets.items():
         print(f"[Trainer] Dataset {name}: overall epochs {reader.epoch: 3d}.{reader.line:010d}", file=file)
 
 
-if __name__ == '__main__':
+def main() -> None:
     parser = argparse.ArgumentParser(description="Feeds marian tsv data for training.")
     parser.add_argument("--config", '-c', required=True, type=str, help='YML configuration input.')
     parser.add_argument("--state", '-s', type=str, help='YML state file, defaults to ${CONFIG}.state.')
@@ -793,3 +793,7 @@ if __name__ == '__main__':
         # not block at this point.
         print("[Trainer] trainer stopped reading input")
         sys.exit(model_trainer.wait())
+
+
+if __name__ == '__main__':
+    main()

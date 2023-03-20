@@ -162,7 +162,7 @@ class Reader(Iterable[bytes]):
 			return iter(self._read_plain(self.filename))
 
 
-if __name__ == '__main__':
+def main() -> None:
 	parser = ArgumentParser()
 	parser.add_argument('--batch-size', type=int, default=1_000_000, help='number of lines per chunk. Note that these chunks are read into memory when being shuffled')
 	parser.add_argument('--threads', '-j', type=int, default=0, help=f'number of concurrent shuffle threads. Defaults to none')
@@ -180,3 +180,7 @@ if __name__ == '__main__':
 	it = shuffle(it, lines=args.batch_size, seed=args.seed, threads=args.threads, tmpdir=args.temporary_directory)
 
 	args.output.writelines(it)
+
+
+if __name__ == '__main__':
+	main()
