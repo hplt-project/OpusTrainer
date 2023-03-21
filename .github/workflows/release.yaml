@@ -22,7 +22,7 @@ jobs:
       - uses: actions/upload-artifact@v3
         with:
           name: sdist
-          path: dist/opuscleaner-*.tar.gz
+          path: dist/opustrainer-*.tar.gz
 
   build_wheels:
     name: Build wheels
@@ -50,7 +50,7 @@ jobs:
       - uses: actions/upload-artifact@v3
         with:
           name: wheels
-          path: ./wheelhouse/opuscleaner-*.whl
+          path: ./wheelhouse/opustrainer-*.whl
 
   upload_pypi:
     needs: [build_wheels, build_sdist]
