@@ -28,9 +28,7 @@ def ignore_sigint():
     """
     signal.signal(signal.SIGINT, signal.SIG_IGN)
 
-# Placeholders, the Chinese edition, with some hardcoded values
-
-md = MosesDetokenizer(lang='zh')
+# tags code
 
 def get_placeholding_candidates(align_line: str) -> List[Tuple[int, int]]:
     """Filters out multiple alignment targets so that we can definitely get a one-to-one replacement"""
@@ -78,7 +76,8 @@ def get_placeholding_candidates(align_line: str) -> List[Tuple[int, int]]:
 # Unpacks a line, removes the alignments, and applies placeholding. Hardcoded for the moment
 # Also applies detokenization on the source side, because getting word alignments for Chinese is otherwise hard
 
-def tag_line(line: str, *, probability: float=0.0, num_tags: int=6, chinese: Optional[Literal['src', 'trg']] = None) -> str:
+def tag_line(line: str, *, probability: float=0.0, num_tags: int=6, custom_detok: Optional[str]=None,
+              side: Optional[Literal['src', 'trg', 'both']] = None) -> str:
     '''Applies tag to words in a line based on alignment info, and then removes the alignment info from the line.
        This is used to enable terminology support by tagging random words with their translation.
        eg "I like cake" would become "I like <tag0> gusta </tag0> cake"
@@ -108,15 +107,22 @@ def tag_line(line: str, *, probability: float=0.0, num_tags: int=6, chinese: Opt
                 # We run out of tags so no point of trying to tag anything else
                 break
 
-    # Special case for Chinese src
-    if chinese == 'src':
-        source_detok: str = md.detokenize(source)
+    # Special logic for detokenization
+    if side is not None:
+        # https://stackoverflow.com/a/16214510 using try/except cause it's faster
+        # see also https://stackoverflow.com/questions/903130/hasattr-vs-try-except-block-to-deal-with-non-existent-attributes
+        try:
+            tag_line.md # Just a blank statement to check for initialisation
+        except AttributeError:
+            tag_line.md = MosesDetokenizer(lang=custom_detok)
+    if side == 'src' or side == 'both':
+        source_detok: str = tag_line.md.detokenize(source)
     else:
         source_detok: str = " ".join(source) # The detokenizer acts on lists, not strings
 
     # Special case for Chinese trg
-    if chinese == 'trg':
-        trg = md.detokenize(target)
+    if side == 'trg' or side == 'both':
+        trg = tag_line.md.detokenize(target)
 
     # Return the sentence, source tagged a la Dinu et al, target as it is and no alignment info
     return  source_detok + "\t" + trg

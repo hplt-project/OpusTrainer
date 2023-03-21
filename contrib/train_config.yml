@@ -35,7 +35,8 @@ modifiers:
   #- tags: # Requires dataset augmented with alignment info
   #  - probability: 0.08
   #  - num_tags: 6
-  #  - chinese: true
+  #  - custom_detok: zh
+  #  - side trg # could be src, trg or both
 
 seed: 1111
 trainer: /usr/bin/cat
