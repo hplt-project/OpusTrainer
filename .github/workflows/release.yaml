@@ -38,10 +38,6 @@ jobs:
 
       - uses: actions/setup-python@v3
 
-        # wheel package necessary for setup.py bdist_wheels for some reason
-      - name: Install wheel package
-        run: python -m pip install wheel
-
       - name: Build wheels
         run: python -m pip wheel -w wheelhouse .
 
