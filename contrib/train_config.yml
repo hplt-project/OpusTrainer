@@ -35,8 +35,8 @@ modifiers:
   #- tags: # Requires dataset augmented with alignment info
   #  - probability: 0.08
   #  - num_tags: 6
-  #  - custom_detok: zh
-  #  - side trg # could be src, trg or both
+  #  - custom_detok_src: null # Null value for the src detokenizer
+  #  - custom_detok_trg: zh
 
 seed: 1111
 trainer: /usr/bin/cat

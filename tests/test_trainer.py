@@ -186,7 +186,7 @@ class TestTagger(unittest.TestCase):
 		with open('../contrib/test-data/clean.zhen.10', 'r', encoding='utf-8') as myinput:
 			with open('../contrib/test-data/clean.zhen.ref.06.4.src', 'r', encoding='utf-8') as reference:
 				for line in myinput:
-					test = tag_line(line, probability=0.6, num_tags=4, custom_detok='zh', side='src')
+					test = tag_line(line, probability=0.6, num_tags=4, custom_detok_src='zh')
 					ref = reference.readline()[:-1]
 					self.assertEqual(test, ref)
 	
@@ -196,7 +196,7 @@ class TestTagger(unittest.TestCase):
 		with open('../contrib/test-data/clean.enzh.10', 'r', encoding='utf-8') as myinput:
 			with open('../contrib/test-data/clean.enzh.ref.06.4.trg', 'r', encoding='utf-8') as reference:
 				for line in myinput:
-					test = tag_line(line, probability=0.6, num_tags=4, custom_detok='zh', side='trg')
+					test = tag_line(line, probability=0.6, num_tags=4, custom_detok_src=None, custom_detok_trg='zh')
 					ref = reference.readline()[:-1]
 					self.assertEqual(test, ref)
 
