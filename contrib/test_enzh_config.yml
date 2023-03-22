@@ -1,0 +1,24 @@
+# Datasets are already TSV files
+datasets:
+  clean: ../contrib/test-data/clean.enzh.10
+
+stages:
+  - start
+
+start:
+  - clean  1
+  - until clean 1
+
+modifiers:
+  - uppercase:
+    - probability: 0.2
+  - titlecase:
+    - probability: 0.2
+  - tags:
+    - probability: 0.1
+    - num_tags: 6
+    - custom_detok_src: null # Null value for the src detokenizer
+    - custom_detok_trg: zh
+
+seed: 1111
+trainer: cat

@@ -11,6 +11,7 @@ from contextlib import closing
 import unittest
 import tempfile
 import os
+import subprocess
 
 from trainer import Dataset, DatasetReader, AsyncDatasetReader, CurriculumLoader, Trainer, StateTracker, tag_line
 
@@ -201,7 +202,7 @@ class TestTagger(unittest.TestCase):
 					self.assertEqual(test, ref)
 
 	def test_tagger_no_zh(self):
-		'''Tests the tagger with zh on the or target'''
+		'''Tests the tagger without zh detokenizer'''
 		random.seed(1)
 		with open('../contrib/test-data/clean.enzh.10', 'r', encoding='utf-8') as myinput:
 			with open('../contrib/test-data/clean.enzh.ref.06.4.none', 'r', encoding='utf-8') as reference:
@@ -210,6 +211,22 @@ class TestTagger(unittest.TestCase):
 					ref = reference.readline()[:-1]
 					self.assertEqual(test, ref)
 
+class End2EndTester(unittest.TestCase):
+	'''Tests the pipeline end-to-end. Aimed to to test the parser.'''
+	def test_full_enzh(self):
+		output: str = subprocess.check_output(['../../OpusTrainer/src/opustrainer/trainer.py', '-c', '../contrib/test_enzh_config.yml', '-d', '--sync'], encoding="utf-8")
+		reference: str = ""
+		with open('../contrib/test-data/test_enzh_config.expected.out', 'r', encoding='utf-8') as reffile:
+			reference: str = "".join(reffile.readlines())
+		self.assertEqual(output, reference)
+
+	def test_full_zhen(self):
+		output: str = subprocess.check_output(['../../OpusTrainer/src/opustrainer/trainer.py', '-c', '../contrib/test_zhen_config.yml', '-d', '--sync'], encoding="utf-8")
+		reference: str = ""
+		with open('../contrib/test-data/test_zhen_config.expected.out', 'r', encoding='utf-8') as reffile:
+			reference: str = "".join(reffile.readlines())
+		self.assertEqual(output, reference)
+		
 
 if __name__ == "__main__":
     unittest.main()
