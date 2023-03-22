@@ -150,9 +150,9 @@ class ModifierType(Enum):
     WORD = 1
 
 MODIFIERS = {
-    'uppercase': (ModifierType.SENTENCE, lambda line: line.upper()),
-    'titlecase': (ModifierType.SENTENCE, apply_titlecase),
-    'tags': (ModifierType.WORD, tag_line)
+    'UpperCase': (ModifierType.SENTENCE, lambda line: line.upper()),
+    'TitleCase': (ModifierType.SENTENCE, apply_titlecase),
+    'Tags': (ModifierType.WORD, tag_line)
 }
 
 @dataclass(frozen=True)
@@ -506,22 +506,27 @@ class CurriculumV1Loader:
         """Reads
         ```yml
         modifiers:
-          - uppercase:
-            - probability: 0.05
-          - titlecase:
-            - probability: 0.05
+          - UpperCase: 0.05
+          - TitleCase: 0.05
+          - Tags: 0.02
+            num_tags: 6
+            custom_detok_src: null
+            custom_detok_trg: zh
         ```
         """
         return [
-            self._load_modifier(modifier_line)
-            for modifier_line in ymldata.get('modifiers', [])
+            self._load_modifier(modifier_entry)
+            for modifier_entry in ymldata.get('modifiers', [])
         ]
 
-    def _load_modifier(self, modifier_line: Dict[str, List[Dict[str, Any]]]) -> Modifier:
-        name = list(modifier_line.keys())[0]
+    def _load_modifier(self, modifier_entry: Dict[str, Any]) -> Modifier:
         myparams: Dict[str, Any] = {}
-        for parameter_pairs in modifier_line[name]:
-            for key, value in parameter_pairs.items():
+        name: str = ""
+        for (i, (key, value)) in enumerate(modifier_entry.items()):
+            if i == 0:
+                name = key # The probability of the modifier is attached to
+                myparams['probability'] = value
+            else:
                 myparams[key] = value
         return Modifier(name, myparams)
 

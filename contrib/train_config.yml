@@ -32,11 +32,10 @@ modifiers:
     - probability: 0.05
   - titlecase:
     - probability: 0.05
-  #- tags: # Requires dataset augmented with alignment info
-  #  - probability: 0.08
-  #  - num_tags: 6
-  #  - custom_detok_src: null # Null value for the src detokenizer
-  #  - custom_detok_trg: zh
+  #- tags: 0.08 # Requires dataset augmented with alignment info
+  #  num_tags: 6
+  #  custom_detok_src: null # Null value for the src detokenizer
+  #  custom_detok_trg: zh
 
 seed: 1111
 trainer: /usr/bin/cat

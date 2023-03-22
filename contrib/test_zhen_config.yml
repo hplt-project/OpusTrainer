@@ -10,11 +10,10 @@ start:
   - until clean 1
 
 modifiers:
-  # No uppercase or titlecase modifier when the source is Chinese as we can't upper or lowercase Chinese
-  - tags:
-    - probability: 0.1
-    - num_tags: 6
-    - custom_detok_src: zh
+  # No UpperCase or TitleCase modifier when the source is Chinese as we can't upper or lowercase Chinese
+  - Tags: 0.1
+    num_tags: 6
+    custom_detok_src: zh
 
 seed: 1111
 trainer: cat
