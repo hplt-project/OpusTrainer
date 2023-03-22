@@ -28,9 +28,9 @@ end:
   - until dirty 5 # use `inf` to mean until forever
 
 modifiers:
-  - uppercase: 0.05
-  - titlecase: 0.05
-  #- tags: 0.08 # Requires dataset augmented with alignment info
+  - UpperCase: 0.05
+  - TitleCase: 0.05
+  #- Tags: 0.08 # Requires dataset augmented with alignment info
   #  num_tags: 6
   #  custom_detok_src: null # Null value for the src detokenizer
   #  custom_detok_trg: zh
