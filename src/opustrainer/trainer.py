@@ -146,13 +146,13 @@ def apply_titlecase(line: str) -> str:
     return '\t'.join(sections)
 
 class ModifierType(Enum):
-    BATCH = 0
-    SENTENCE = 1
+    SENTENCE = 0
+    WORD = 1
 
 MODIFIERS = {
-    'uppercase': (ModifierType.BATCH, lambda line: line.upper()),
-    'titlecase': (ModifierType.BATCH, apply_titlecase),
-    'tags': (ModifierType.SENTENCE, tag_line)
+    'uppercase': (ModifierType.SENTENCE, lambda line: line.upper()),
+    'titlecase': (ModifierType.SENTENCE, apply_titlecase),
+    'tags': (ModifierType.WORD, tag_line)
 }
 
 @dataclass(frozen=True)
@@ -653,9 +653,9 @@ class Trainer:
                 # TODO: maybe make this self.stage.modifiers? Would that make sense?
                 for modifier in self.curriculum.modifiers:
                     modifier_type, modifier_fun = MODIFIERS[modifier.name]
-                    if modifier_type == ModifierType.BATCH:
+                    if modifier_type == ModifierType.SENTENCE:
                         batch = [modifier_fun(line.rstrip('\n')) + '\n' if modifier.settings['probability'] > random.random() else line for line in batch]
-                    elif modifier_type == ModifierType.SENTENCE:
+                    elif modifier_type == ModifierType.WORD:
                         batch = [modifier_fun(line.rstrip('\n'), **modifier.settings) + '\n' for line in batch]
 
                 random.shuffle(batch)
