@@ -28,10 +28,8 @@ end:
   - until dirty 5 # use `inf` to mean until forever
 
 modifiers:
-  - uppercase:
-    - probability: 0.05
-  - titlecase:
-    - probability: 0.05
+  - uppercase: 0.05
+  - titlecase: 0.05
   #- tags: 0.08 # Requires dataset augmented with alignment info
   #  num_tags: 6
   #  custom_detok_src: null # Null value for the src detokenizer

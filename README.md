@@ -51,8 +51,12 @@ end:
   - until dirty 5 # use `inf` to mean until forever
 
 modifiers:
-- uppercase 0.05 # Apply uppercase randomly to 0.05% of sentences. Use 0 to disable
-- titlecase 0.05 # Apply titlecase randomly to 0.05% of sentences. Use 0 to disable
+- UpperCase: 0.05 # Apply uppercase randomly to 0.05% of sentences. Use 0 to disable
+- TitleCase: 0.05 # Apply titlecase randomly to 0.05% of sentences. Use 0 to disable
+#- tags: 0.08 # Requires dataset augmented with alignment info, appended to the
+  #  num_tags: 6
+  #  custom_detok_src: null # Null value for the src detokenizer
+  #  custom_detok_trg: zh
 
 seed: 1111
 trainer: /path/to/trainer/run.py
@@ -78,43 +82,84 @@ options:
 ```
 Once you fix the paths in the configuration file, `train_config.yml` you can run a test case by doing:
 ```bash
-./trainer.py -c train_config.yml
+./trainer.py -c train_config.yml /path/to/marian -c marian_config --any --other --flags
 ```
 You can check resulting mixed file in `/tmp/test`. If your neural network trainer doesn't support training from `stdin`, you can use this tool to generate a training dataset and then disable data reordering or shuffling at your trainer implementation, as your training input should be balanced.
 
 At the start of the training all datasets are shuffled. Each time a dataset's end is reached, it is re-shuffled. Shuffling [in the system temp directory](https://docs.python.org/3.11/library/tempfile.html#tempfile.gettempdir) but can be repositioned using `--temporary-directory` or the `TMPDIR` environment variable. By default, the training state is kept in the same place as the configuration file. If training is interrupted, re-running the trainer should resume from where it was (depending on how much your neural network trainer has buffered, that part will be skipped).
 
-## Generating vocabulary and placeholders before training
-To use the placeholder code augment your training data with placeholders before training, look at this example script:
+## Generating vocabulary and tags before training
+In the future, this will be handled by a training Pipeline, but until then here's the basic scripts used
+
+For producing alignment augmented corpus use this script:
+```bash
+#!/bin/bash -v
+
+# Usage: ./align_corpus.sh source_corpus target_corpus src trg
+
+# install fast align
+mkdir -p bin
+
+# download and compile fast_align
+if [ ! -e bin/fast_align ]; then
+    git clone https://github.com/clab/fast_align
+    mkdir -p fast_align/build
+    cd fast_align/build
+    cmake ..
+    make -j4
+    cp fast_align atools ../../bin
+    cd ../../
+fi
+
+# Prepare the corpus for fast align
+test -s $2/corpus.tmp.${3}-${4}.falign ||  cat $1 | sed 's/\t/ ||| /' > $2/corpus.tmp.${3}-${4}.falign
+
+# Align it
+test -s $2/align.${3}-${4}.s2t  || bin/fast_align -vod  -i $2/corpus.tmp.${3}-${4}.falign > $2/align.${3}-${4}.s2t
+test -s $2/align.${3}-${4}.t2s  || bin/fast_align -vodr -i $2/corpus.tmp.${3}-${4}.falign > $2/align.${3}-${4}.t2s
+
+test -s $2/corpus.${3}-${4}.aln || bin/atools -i $2/align.${3}-${4}.s2t -j $2/align.${3}-${4}.t2s -c grow-diag-final-and > $2/corpus.${3}-${4}.aln
+```
+
+For creating vocabulary with tags support, use this script:
 ```bash
 #!/usr/bin/env bash
-# Get the placeholders
-../placeholders/placeholders.py -c train_config_bgen.yml --dump_placeholders > my_placeholders
-# train vocabulary
-spm_train --bos_id=-1 --eos_id=0 --unk_id=1 --user_defined_symbols_file my_placeholders \
-  --model_prefix="test/vocab.bgen" --vocab_size=12000 \
-  --input="/path/to/data/clean.bgen" \
-  --shuffle_input_sentence=true --character_coverage 1
+#Usage ./vocab.sh en de path-to-corpora char-cov vocab_size
 
-# Move vocabulary to the new location
-mv test/vocab.bgen.model test/vocab.bgen.spm
+char_cov=${4:-'0.9995'} # Default char coverage
+vocab_size=${5:-'32000'} # Default vocab size
+# Set up some constants
 
-# Make all datasets placeholded
-for myfile in test/data/*.bgen; do
-	../placeholders/placeholders.py -n --strict --encode -c train_config_bgen.yml < ${myfile} > ${myfile}.pls
-done
+# Language pairs
+src=$1
+trg=$2
+prefix="--model_prefix=model.${src}-${trg}"
+
+# Placeholders array
+placeholders="--user_defined_symbols=<tag0>,</tag0>,<tag1>,</tag1>,<tag2>,</tag2>,<tag3>,</tag3>,<tag4>,</tag4>,<tag5>,</tag5>"
+
+# Character coverage. CJK is recommended to have 0.9995, vocab languages proabbly you want 1.
+char_cov="--character_coverage=${char_cov}"
+
+# First clone and compile SPM
+spm_exec="sentencepiece/build/src/spm_train"
+if [ ! -e ${spm_exec} ]; then
+    git clone https://github.com/google/sentencepiece.git
+    cd sentencepiece
+    mkdir build
+    cd build
+    cmake ..
+    make -j4
+    cd ..
+    cd ..
+    if [ ! -e ${spm_exec} ]; then
+        echo "Failed to compile sentencepiece"
+        exit 1
+    fi
+fi
+
+$spm_exec --bos_id=-1 --eos_id=0 --unk_id=1 ${placeholders} ${char_cov} ${prefix} --vocab_size=${vocab_size} --input=${3} --input_sentence_size=20000000 --byte_fallback #--input_format=tsv seems broken
 ```
-You need to augment the training configuration with additional placeholder configuration setting:
-```yml
-vocab: /path/to/vocab.bgen.spm
-placeholder-symbol: "<PLACEHOLDER>"
-num-placeholders: 4
-regexes:
-    - (https?:\/\/www\.\w{1,63}\.\w{1,63}(?:\/\w{0,63}){0,})
-    - (www\.\w{1,63}\.\w{1,63}(?:\/\w{0,63}){0,})
-    - ([a-zA-Z0-9_.+-]+@[a-zA-Z0-9-]+\.[a-zA-Z0-9-.]+)
-```
-After vocabulary is trained and data is preprocessed, proceed with a normal training run.
 
 ## Future work
 
