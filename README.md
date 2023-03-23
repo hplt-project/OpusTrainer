@@ -51,9 +51,9 @@ end:
   - until dirty 5 # use `inf` to mean until forever
 
 modifiers:
-- UpperCase: 0.05 # Apply uppercase randomly to 0.05% of sentences. Use 0 to disable
-- TitleCase: 0.05 # Apply titlecase randomly to 0.05% of sentences. Use 0 to disable
-#- tags: 0.08 # Requires dataset augmented with alignment info, appended to the
+- UpperCase: 0.05 # Apply uppercase randomly to 0.05% of sentences. Set to 0 to disable, or remove line entirely.
+- TitleCase: 0.05 # Apply titlecase randomly to 0.05% of sentences.
+#- Tags: 0.08 # Requires dataset augmented with alignment info, appended to the
   #  num_tags: 6
   #  custom_detok_src: null # Null value for the src detokenizer
   #  custom_detok_trg: zh
