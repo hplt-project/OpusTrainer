@@ -73,6 +73,16 @@ class PlaceholderTagModifier(Modifier):
     """Unpacks a line, removes the alignments, and applies placeholding. Hardcoded for the moment.
        Also applies detokenization on the source side, because getting word alignments for Chinese
        is otherwise hard.
+
+       Usage:
+       ```yaml
+       modifiers:
+       - Tags: 0.02
+         num_tags: 6
+         custom_detok_src: 'zh'
+         custom_detok_trg: null
+         template: " <tag{n}> {token} </tag{n}>"
+        ```
     """
 
     num_tags: int
@@ -81,8 +91,8 @@ class PlaceholderTagModifier(Modifier):
     trg_detokenizer: Optional[Detokenizer]
 
     def __init__(self, probability: float=0.0, num_tags: int=6,
-        custom_detok_src: Optional[str]=None, custom_detok_trg: Optional[str] = None,
-        template=" <tag{0:d}> {1} </tag{0:d}>"):
+        custom_detok_src: Optional[str]=None, custom_detok_trg: Optional[str]=None,
+        template: str=" <tag{n}> {token} </tag{n}>"):
         super().__init__(probability)
 
         self.num_tags = num_tags
@@ -134,7 +144,7 @@ class PlaceholderTagModifier(Modifier):
                 break
 
             tag_id = tags.pop()
-            source[candidates[i][0]] = source[candidates[i][0]] + self.template.format(tag_id, target[candidates[i][1]])
+            source[candidates[i][0]] = source[candidates[i][0]] + self.template.format(n=tag_id, token=target[candidates[i][1]])
 
         source_detok: str = self.src_detokenizer.detokenize(source)
         if self.trg_detokenizer is not None:
