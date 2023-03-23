@@ -161,7 +161,7 @@ class DatasetReader:
         # feasible to just write to a named pipe (or even stdout) instead of
         # a temporary file, and let the trainer read directly from that. Not 
         # sure if that has any performance or stability benefits/drawbacks.
-        subprocess.check_call([PATH_TO_SHUFFLE,
+        subprocess.check_call([sys.executable, PATH_TO_SHUFFLE,
             *(['--temporary-directory', self.tmpdir] if self.tmpdir else []),
             str(self.seed),
             f'/dev/fd/{fh.fileno()}',
@@ -228,7 +228,7 @@ class AsyncDatasetReader(DatasetReader):
         self._pending = ShuffledFile(
             seed=seed,
             file=cast(TextIO, fh),
-            proc=subprocess.Popen([PATH_TO_SHUFFLE,
+            proc=subprocess.Popen([sys.executable, PATH_TO_SHUFFLE,
                 *(['--temporary-directory', self.tmpdir] if self.tmpdir else []),
                 str(seed),
                 f'/dev/fd/{fh.fileno()}',
