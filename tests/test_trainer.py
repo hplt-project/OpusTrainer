@@ -1,19 +1,16 @@
 #!/usr/bin/env python3
 '''Tests the available functionality'''
-import sys
-sys.path.append("../src/opustrainer")
-
+import os
 import random
+import subprocess
+import tempfile
+import unittest
 
 from typing import IO, Type
 from collections import Counter
 from contextlib import closing
-import unittest
-import tempfile
-import os
-import subprocess
 
-from trainer import Dataset, DatasetReader, AsyncDatasetReader, CurriculumLoader, Trainer, StateTracker, tag_line
+from opustrainer.trainer import Dataset, DatasetReader, AsyncDatasetReader, CurriculumLoader, Trainer, StateTracker
 
 TEST_FILE: str
 
@@ -137,9 +134,9 @@ class TestTrainer(unittest.TestCase):
 		"""
 		config = {
 			'datasets': {
-				'clean': '../contrib/test-data/clean',
-				'medium': '../contrib/test-data/medium',
-				'dirty': '../contrib/test-data/dirty'
+				'clean': 'contrib/test-data/clean',
+				'medium': 'contrib/test-data/medium',
+				'dirty': 'contrib/test-data/dirty'
 			},
 			'stages': [
 				'start',
@@ -179,54 +176,3 @@ class TestTrainer(unittest.TestCase):
 				batches.extend(state_tracker.run(trainer2))
 			
 		self.assertEqual(batches, batches_ref)
-
-class TestTagger(unittest.TestCase):
-	def test_tagger_zh_src(self):
-		'''Tests the tagger with zh on the source side'''
-		random.seed(1)
-		with open('../contrib/test-data/clean.zhen.10', 'r', encoding='utf-8') as myinput:
-			with open('../contrib/test-data/clean.zhen.ref.06.4.src', 'r', encoding='utf-8') as reference:
-				for line in myinput:
-					test = tag_line(line, probability=0.6, num_tags=4, custom_detok_src='zh')
-					ref = reference.readline()[:-1]
-					self.assertEqual(test, ref)
-	
-	def test_tagger_zh_trg(self):
-		'''Tests the tagger with zh on the target side'''
-		random.seed(1)
-		with open('../contrib/test-data/clean.enzh.10', 'r', encoding='utf-8') as myinput:
-			with open('../contrib/test-data/clean.enzh.ref.06.4.trg', 'r', encoding='utf-8') as reference:
-				for line in myinput:
-					test = tag_line(line, probability=0.6, num_tags=4, custom_detok_src=None, custom_detok_trg='zh')
-					ref = reference.readline()[:-1]
-					self.assertEqual(test, ref)
-
-	def test_tagger_no_zh(self):
-		'''Tests the tagger without zh detokenizer'''
-		random.seed(1)
-		with open('../contrib/test-data/clean.enzh.10', 'r', encoding='utf-8') as myinput:
-			with open('../contrib/test-data/clean.enzh.ref.06.4.none', 'r', encoding='utf-8') as reference:
-				for line in myinput:
-					test = tag_line(line, probability=0.6, num_tags=4)
-					ref = reference.readline()[:-1]
-					self.assertEqual(test, ref)
-
-class End2EndTester(unittest.TestCase):
-	'''Tests the pipeline end-to-end. Aimed to to test the parser.'''
-	def test_full_enzh(self):
-		output: str = subprocess.check_output(['../../OpusTrainer/src/opustrainer/trainer.py', '-c', '../contrib/test_enzh_config.yml', '-d', '--sync'], encoding="utf-8")
-		reference: str = ""
-		with open('../contrib/test-data/test_enzh_config.expected.out', 'r', encoding='utf-8') as reffile:
-			reference: str = "".join(reffile.readlines())
-		self.assertEqual(output, reference)
-
-	def test_full_zhen(self):
-		output: str = subprocess.check_output(['../../OpusTrainer/src/opustrainer/trainer.py', '-c', '../contrib/test_zhen_config.yml', '-d', '--sync'], encoding="utf-8")
-		reference: str = ""
-		with open('../contrib/test-data/test_zhen_config.expected.out', 'r', encoding='utf-8') as reffile:
-			reference: str = "".join(reffile.readlines())
-		self.assertEqual(output, reference)
-		
-
-if __name__ == "__main__":
-    unittest.main()

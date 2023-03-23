@@ -1,6 +1,6 @@
 # Datasets are already TSV files
 datasets:
-  clean: ../contrib/test-data/clean.enzh.10
+  clean: test-data/clean.enzh.10
 
 stages:
   - start

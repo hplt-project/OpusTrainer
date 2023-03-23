@@ -1,6 +1,6 @@
 # Datasets are already TSV files
 datasets:
-  clean: ../contrib/test-data/clean.zhen.10
+  clean: test-data/clean.zhen.10
 
 stages:
   - start

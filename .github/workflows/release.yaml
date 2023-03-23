@@ -18,9 +18,9 @@ jobs:
 
       - name: Run tests
         run: |-
-          pip install -r requirements.txt
-          cd tests
-          ./test_trainer.py
+          pip install .
+          python -m unittest discover -s tests
+
   build_sdist:
     name: Build source distribution
     runs-on: ubuntu-latest
