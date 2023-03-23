@@ -11,15 +11,19 @@ import random
 import subprocess
 import time
 
+from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from enum import Enum
 from typing import List, Tuple, Dict, Set, Any, Optional, Union, Type, TextIO, cast, Iterable, Literal
 from tempfile import TemporaryFile
 from itertools import islice
-
-from sacremoses import MosesDetokenizer
+from functools import partial
 
 import yaml
+
+from opustrainer.types import Modifier
+from opustrainer.modifiers.surface import UpperCaseModifier, TitleCaseModifier
+from opustrainer.modifiers.placeholders import PlaceholderTagModifier
 
 def ignore_sigint():
     """Used as pre-exec hook for the trainer program as to ignore ctrl-c. We'll
@@ -28,131 +32,17 @@ def ignore_sigint():
     """
     signal.signal(signal.SIGINT, signal.SIG_IGN)
 
-# tags code
-
-def get_placeholding_candidates(align_line: str) -> List[Tuple[int, int]]:
-    """Filters out multiple alignment targets so that we can definitely get a one-to-one replacement"""
-    def tuplify(pair: str) -> Tuple[int, int]:
-        s, t = pair.split('-')
-        return (int(s), int(t))
-    # Create the two src-trg and trg-src sets
-    src_trg: List[Tuple[int, int]] = [tuplify(i) for i in align_line.split()]
-    trg_src: List[Tuple[int, int]] = [(c, d) for d,c in src_trg]
-    # Sort them
-    src_trg.sort(key=lambda x: x[0])
-    trg_src.sort(key=lambda x: x[0])
-    # Remove anything that is found multiple times. Anything that is found multiple times means non bijective alignment
-    # Since they are sorted, we can reduce some time complexity
-    def filter_tuples(inlist: List[Tuple[int, int]]) -> List[Tuple[int, int]]:
-        '''Removes places non x->y x->z type of alignments'''
-        new_list: List[Tuple[int, int]] = []
-        blacklisted: Set[int] = set()
-        for i in range(len(inlist)):
-            curr: int = inlist[i][0]
-            if curr not in blacklisted:
-                if i < len(inlist) - 1:
-                    peek: int = inlist[i+1][0]
-                    if curr==peek:
-                        blacklisted.add(curr)
-                    else:
-                        new_list.append(inlist[i])
-                else:
-                    new_list.append(inlist[i])
-        return new_list
-
-    src_trg_filtered: List[Tuple[int, int]] = filter_tuples(src_trg)
-    trg_src_filtered: List[Tuple[int, int]] = filter_tuples(trg_src)
-
-    # Now, we are looking for the union of the two.
-    # First, reverse src_trg
-    trg_src_filtered_rereversed: List[Tuple[int, int]] = [(c, d) for d,c in trg_src_filtered]
-
-    # Now convert both to sets and take the union
-    src_trg_set: Set[Tuple[int, int]] = set(src_trg_filtered)
-    trg_src_filtered_rereversed_set: Set[Tuple[int, int]] = set(trg_src_filtered_rereversed)
-
-    return list(src_trg_set & trg_src_filtered_rereversed_set)
-
-# Unpacks a line, removes the alignments, and applies placeholding. Hardcoded for the moment
-# Also applies detokenization on the source side, because getting word alignments for Chinese is otherwise hard
-
-def tag_line(line: str, *, probability: float=0.0, num_tags: int=6, custom_detok_src: Optional[str]=None,
-              custom_detok_trg: Optional[Literal['src', 'trg', 'both']] = None) -> str:
-    '''Applies tag to words in a line based on alignment info, and then removes the alignment info from the line.
-       This is used to enable terminology support by tagging random words with their translation.
-       eg "I like cake" would become "I like <tag0> gusta </tag0> cake. By default the detokenizer used is the trivial
-       detokenizer, but we can instead have separate detokenizers on src and trg."
-    '''
-    src, trg, alignment = line.strip().split('\t')
-    source = src.split(' ')
-    target = trg.split(' ')
-
-    # Get replacement candidates
-    candidates: List[Tuple[int, int]] = get_placeholding_candidates(alignment)
-
-    # Get list of possible tags. Hardcode for now
-    tags: List[str] = [str(x) for x in range(num_tags)]
-    # Shuffle the list. It's quite slow, but we only have 6 elements so it should be fine
-    # For more information https://stackoverflow.com/questions/10048069/what-is-the-most-pythonic-way-to-pop-a-random-element-from-a-list
-    random.shuffle(tags)
-
-    # Replace each of them with a THRESHOLD probability unless the two words are exactly the same
-    # This is to avoid having numbers trained with placeholders or any other words that are exactly the same
-    for i in range(len(candidates)):
-        if source[candidates[i][0]] != target[candidates[i][1]] and  random.random() < probability:
-            # Try to get a tag if available and tag our data
-            if len(tags) > 0:
-                tag_id = tags.pop()
-                source[candidates[i][0]] = source[candidates[i][0]] + " <tag" + tag_id + "> " + target[candidates[i][1]] + " </tag" + tag_id + ">"
-            else:
-                # We run out of tags so no point of trying to tag anything else
-                break
-
-    # Special logic for detokenization
-    if custom_detok_src is not None:
-        # https://stackoverflow.com/a/16214510 using try/except cause it's faster
-        # see also https://stackoverflow.com/questions/903130/hasattr-vs-try-except-block-to-deal-with-non-existent-attributes
-        try:
-            tag_line.md_src # Just a blank statement to check for initialisation
-        except AttributeError:
-            tag_line.md_src = MosesDetokenizer(lang=custom_detok_src)
-        source_detok: str = tag_line.md_src.detokenize(source)
-    else:
-        source_detok: str = " ".join(source) # The detokenizer acts on lists, not strings
-    # Target language
-    if custom_detok_trg is not None:
-        try:
-            tag_line.md_trg # Just a blank statement to check for initialisation
-        except AttributeError:
-            tag_line.md_trg = MosesDetokenizer(lang=custom_detok_trg)
-        trg = tag_line.md_trg.detokenize(target)
-
-    # Return the sentence, source tagged a la Dinu et al, target as it is and no alignment info
-    return  source_detok + "\t" + trg
-
-# End of placeholding code:
 
 # Path to something that can shuffle data. Called with seed, output-path, input-files
 # TODO: Ideally this also deduplicates the src side of the sentence pairs it shuffles ;)
 PATH_TO_SHUFFLE = os.path.dirname(os.path.realpath(__file__)) + "/shuffle.py"
 
 # Available batch modifiers
-def apply_titlecase(line: str) -> str:
-    """Applies titlecase to a sentence. Beware of tabs as src and trg separator
-    """
-    sections: List[str] = line.split('\t')
-    for i in range(len(sections)):
-        sections[i] = ' '.join([word[0].upper() + word[1:] for word in sections[i].split()])
-    return '\t'.join(sections)
-
-class ModifierType(Enum):
-    SENTENCE = 0
-    WORD = 1
-
+# TODO: Import these lazy, on demand?
 MODIFIERS = {
-    'UpperCase': (ModifierType.SENTENCE, lambda line: line.upper()),
-    'TitleCase': (ModifierType.SENTENCE, apply_titlecase),
-    'Tags': (ModifierType.WORD, tag_line)
+    'UpperCase': UpperCaseModifier,
+    'TitleCase': TitleCaseModifier,
+    'Tags': PlaceholderTagModifier,
 }
 
 @dataclass(frozen=True)
@@ -174,16 +64,6 @@ class Stage:
     datasets: List[Tuple[Dataset, float]]
     until_dataset: str
     until_epoch: Optional[int]
-
-
-@dataclass(frozen=True)
-class Modifier:
-    name: str
-    settings: Dict[str, Any]
-
-    def __post_init__(self):
-        if self.name not in MODIFIERS:
-            raise ValueError(f"no modifier named '{self.name}' is defined")
 
 
 @dataclass(frozen=True)
@@ -520,15 +400,15 @@ class CurriculumV1Loader:
         ]
 
     def _load_modifier(self, modifier_entry: Dict[str, Any]) -> Modifier:
-        myparams: Dict[str, Any] = {}
+        settings: Dict[str, Any] = {}
         name: str = ""
-        for (i, (key, value)) in enumerate(modifier_entry.items()):
+        for i, (key, value) in enumerate(modifier_entry.items()):
             if i == 0:
                 name = key # The probability of the modifier is attached to
-                myparams['probability'] = value
+                settings['probability'] = value
             else:
-                myparams[key] = value
-        return Modifier(name, myparams)
+                settings[key] = value
+        return MODIFIERS[name](**settings)
 
 
 class CurriculumLoader:
@@ -657,11 +537,7 @@ class Trainer:
                 # (Multiple modifiers could be applied to the same line!)
                 # TODO: maybe make this self.stage.modifiers? Would that make sense?
                 for modifier in self.curriculum.modifiers:
-                    modifier_type, modifier_fun = MODIFIERS[modifier.name]
-                    if modifier_type == ModifierType.SENTENCE:
-                        batch = [modifier_fun(line.rstrip('\n')) + '\n' if modifier.settings['probability'] > random.random() else line for line in batch]
-                    elif modifier_type == ModifierType.WORD:
-                        batch = [modifier_fun(line.rstrip('\n'), **modifier.settings) + '\n' for line in batch]
+                    batch = [modifier(line.rstrip('\n')) + '\n' for line in batch]
 
                 random.shuffle(batch)
 
