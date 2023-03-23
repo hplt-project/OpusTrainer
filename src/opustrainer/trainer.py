@@ -21,7 +21,7 @@ from functools import partial
 
 import yaml
 
-from opustrainer.types import Modifier
+from opustrainer.modifiers import Modifier
 from opustrainer.modifiers.surface import UpperCaseModifier, TitleCaseModifier
 from opustrainer.modifiers.placeholders import PlaceholderTagModifier
 

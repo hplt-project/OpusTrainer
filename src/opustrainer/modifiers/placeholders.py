@@ -4,7 +4,7 @@ from typing import Set, List, Tuple, Optional, Protocol
 
 from sacremoses import MosesDetokenizer
 
-from opustrainer.types import Modifier
+from opustrainer.modifiers import Modifier
 
 
 def tuplify(pair: str) -> Tuple[int, int]:

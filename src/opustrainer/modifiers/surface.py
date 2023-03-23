@@ -2,7 +2,7 @@ import random
 from typing import Callable, Type, List
 from functools import partial
 
-from opustrainer.types import Modifier
+from opustrainer.modifiers import Modifier
 
 
 class LineModifier(Modifier):
