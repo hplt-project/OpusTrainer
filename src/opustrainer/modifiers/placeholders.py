@@ -70,9 +70,9 @@ class SpaceDetokenizer:
 
 
 class PlaceholderTagModifier(Modifier):
-    """Unpacks a line, removes the alignments, and applies placeholding. Hardcoded for the moment.
-       Also applies detokenization on the source side, because getting word alignments for Chinese
-       is otherwise hard.
+    """Unpacks a line, removes the alignments, and applies placeholding. Supports trivial and non trivial detokenization
+       using moses detokenizer, which should be used for CJK languages and languages where words are typically not space
+       delimited.
 
        Usage:
        ```yaml
