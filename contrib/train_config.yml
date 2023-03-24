@@ -28,8 +28,15 @@ end:
   - until dirty 5 # use `inf` to mean until forever
 
 modifiers:
-  - uppercase 0.05
-  - titlecase 0.05
+  - UpperCase: 0.05
+  - TitleCase: 0.05
+  #- Tags: 0.08 # Requires dataset augmented with alignment info
+  #  num_tags: 6
+  #  custom_detok_src: null # Null value for the src detokenizer
+  #  custom_detok_trg: zh
+  # template: " <tag{n}> {token} </tag{n}>" # This is the default way of inserting tags.
+    # We STRONGLY DISCOURAGE the modification of this line and in fact it shouldn't be included in the config
+    # unless you really know what you are doing.
 
 seed: 1111
-trainer: /home/dheart/uni_stuff/postdoc/empty-train/trainer/test.py
+trainer: /usr/bin/cat

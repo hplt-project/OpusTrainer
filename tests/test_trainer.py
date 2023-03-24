@@ -1,11 +1,16 @@
+#!/usr/bin/env python3
+'''Tests the available functionality'''
+import os
+import random
+import subprocess
+import tempfile
+import unittest
+
 from typing import IO, Type
 from collections import Counter
 from contextlib import closing
-import unittest
-import tempfile
-import os
 
-from trainer import Dataset, DatasetReader, AsyncDatasetReader, CurriculumLoader, Trainer, StateTracker
+from opustrainer.trainer import Dataset, DatasetReader, AsyncDatasetReader, CurriculumLoader, Trainer, StateTracker
 
 TEST_FILE: str
 
@@ -129,9 +134,9 @@ class TestTrainer(unittest.TestCase):
 		"""
 		config = {
 			'datasets': {
-				'clean': 'test/data/clean',
-				'medium': 'test/data/medium',
-				'dirty': 'test/data/dirty'
+				'clean': 'contrib/test-data/clean',
+				'medium': 'contrib/test-data/medium',
+				'dirty': 'contrib/test-data/dirty'
 			},
 			'stages': [
 				'start',

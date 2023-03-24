@@ -2,6 +2,7 @@
 """A translation model trainer. It feeds marian different sets of datasets with different thresholds
 for different stages of the training. Data is uncompressed and TSV formatted src\ttrg
 """
+from ctypes import alignment
 import os
 import sys
 import signal
@@ -10,12 +11,19 @@ import random
 import subprocess
 import time
 
+from abc import ABC, abstractmethod
 from dataclasses import dataclass
-from typing import List, Tuple, Dict, Any, Optional, Union, Type, TextIO, cast, Iterable
+from enum import Enum
+from typing import List, Tuple, Dict, Set, Any, Optional, Union, Type, TextIO, cast, Iterable, Literal
 from tempfile import TemporaryFile
 from itertools import islice
+from functools import partial
 
 import yaml
+
+from opustrainer.modifiers import Modifier
+from opustrainer.modifiers.surface import UpperCaseModifier, TitleCaseModifier
+from opustrainer.modifiers.placeholders import PlaceholderTagModifier
 
 def ignore_sigint():
     """Used as pre-exec hook for the trainer program as to ignore ctrl-c. We'll
@@ -24,24 +32,18 @@ def ignore_sigint():
     """
     signal.signal(signal.SIGINT, signal.SIG_IGN)
 
+
 # Path to something that can shuffle data. Called with seed, output-path, input-files
 # TODO: Ideally this also deduplicates the src side of the sentence pairs it shuffles ;)
 PATH_TO_SHUFFLE = os.path.dirname(os.path.realpath(__file__)) + "/shuffle.py"
 
 # Available batch modifiers
-def apply_titlecase(line: str) -> str:
-    """Applies titlecase to a sentence. Beware of tabs as src and trg separator
-    """
-    sections: List[str] = line.split('\t')
-    for i in range(len(sections)):
-        sections[i] = ' '.join([word[0].upper() + word[1:] for word in sections[i].split()])
-    return '\t'.join(sections)
-
+# TODO: Import these lazy, on demand?
 MODIFIERS = {
-    'uppercase': lambda line: line.upper(),
-    'titlecase': apply_titlecase,
+    'UpperCase': UpperCaseModifier,
+    'TitleCase': TitleCaseModifier,
+    'Tags': PlaceholderTagModifier,
 }
-
 
 @dataclass(frozen=True)
 class Dataset:
@@ -62,16 +64,6 @@ class Stage:
     datasets: List[Tuple[Dataset, float]]
     until_dataset: str
     until_epoch: Optional[int]
-
-
-@dataclass(frozen=True)
-class Modifier:
-    name: str
-    frequency: float
-
-    def __post_init__(self):
-        if self.name not in MODIFIERS:
-            raise ValueError(f"no modifier named '{self.name}' is defined")
 
 
 @dataclass(frozen=True)
@@ -169,7 +161,7 @@ class DatasetReader:
         # feasible to just write to a named pipe (or even stdout) instead of
         # a temporary file, and let the trainer read directly from that. Not 
         # sure if that has any performance or stability benefits/drawbacks.
-        subprocess.check_call([PATH_TO_SHUFFLE,
+        subprocess.check_call([sys.executable, PATH_TO_SHUFFLE,
             *(['--temporary-directory', self.tmpdir] if self.tmpdir else []),
             str(self.seed),
             f'/dev/fd/{fh.fileno()}',
@@ -236,7 +228,7 @@ class AsyncDatasetReader(DatasetReader):
         self._pending = ShuffledFile(
             seed=seed,
             file=cast(TextIO, fh),
-            proc=subprocess.Popen([PATH_TO_SHUFFLE,
+            proc=subprocess.Popen([sys.executable, PATH_TO_SHUFFLE,
                 *(['--temporary-directory', self.tmpdir] if self.tmpdir else []),
                 str(seed),
                 f'/dev/fd/{fh.fileno()}',
@@ -394,18 +386,29 @@ class CurriculumV1Loader:
         """Reads
         ```yml
         modifiers:
-          - uppercase 0.05
-          - titlecase 0.05
+          - UpperCase: 0.05
+          - TitleCase: 0.05
+          - Tags: 0.02
+            num_tags: 6
+            custom_detok_src: null
+            custom_detok_trg: zh
         ```
         """
         return [
-            self._load_modifier(modifier_line)
-            for modifier_line in ymldata.get('modifiers', [])
+            self._load_modifier(modifier_entry)
+            for modifier_entry in ymldata.get('modifiers', [])
         ]
 
-    def _load_modifier(self, line:str) -> Modifier:
-        name, frequency = line.split()
-        return Modifier(name, float(frequency))
+    def _load_modifier(self, modifier_entry: Dict[str, Any]) -> Modifier:
+        settings: Dict[str, Any] = {}
+        name: str = ""
+        for i, (key, value) in enumerate(modifier_entry.items()):
+            if i == 0:
+                name = key # The probability of the modifier is attached to
+                settings['probability'] = value
+            else:
+                settings[key] = value
+        return MODIFIERS[name](**settings)
 
 
 class CurriculumLoader:
@@ -530,12 +533,11 @@ class Trainer:
                 for dataset, weight in self.stage.datasets:
                     batch.extend(islice(self.readers[dataset.name], 0, int(batch_size * weight)))
 
-                # Apply any modifiers to random lines in the batch
+                # Apply any modifiers to random lines in the batch, or sentence
                 # (Multiple modifiers could be applied to the same line!)
                 # TODO: maybe make this self.stage.modifiers? Would that make sense?
                 for modifier in self.curriculum.modifiers:
-                    modifier_fun = MODIFIERS[modifier.name]
-                    batch = [modifier_fun(line.rstrip('\n')) + '\n' if modifier.frequency > random.random() else line for line in batch]
+                    batch = [modifier(line.rstrip('\n')) + '\n' for line in batch]
 
                 random.shuffle(batch)
 
