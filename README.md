@@ -58,6 +58,7 @@ modifiers:
   #  custom_detok_src: null # Null value for the src detokenizer
   #  custom_detok_trg: zh
   #  # template: " <tag{n}> {token} </tag{n}>" # This is the default way of inserting tags. Beware of changing it.
+                                               # DO NOT include it in the config as it's a default parameter.
 
 seed: 1111
 trainer: /path/to/trainer/run.py
