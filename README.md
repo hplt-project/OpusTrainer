@@ -57,6 +57,7 @@ modifiers:
   #  num_tags: 6
   #  custom_detok_src: null # Null value for the src detokenizer
   #  custom_detok_trg: zh
+  #  # template: " <tag{n}> {token} </tag{n}>" # This is the default way of inserting tags. Beware of changing it.
 
 seed: 1111
 trainer: /path/to/trainer/run.py
@@ -88,7 +89,16 @@ You can check resulting mixed file in `/tmp/test`. If your neural network traine
 
 At the start of the training all datasets are shuffled. Each time a dataset's end is reached, it is re-shuffled. Shuffling [in the system temp directory](https://docs.python.org/3.11/library/tempfile.html#tempfile.gettempdir) but can be repositioned using `--temporary-directory` or the `TMPDIR` environment variable. By default, the training state is kept in the same place as the configuration file. If training is interrupted, re-running the trainer should resume from where it was (depending on how much your neural network trainer has buffered, that part will be skipped).
 
-## Generating vocabulary and tags before training
+### Tags
+In order to train models supporting vocabulary "hints" we provide a tags system where we laverage word alignment information to provide "hints" for the translation model to what it should produce on the Target side. The work is very similar to [Dinu et al. 2019](https://aclanthology.org/P19-1294/). An example. Given an alignment augmented tsv training line:
+```I like pies! \t Ich mag Kuchen! \t 0-0 1-1 2-2```
+The machine translation traing system would see something like:
+```I like <tag0> mag <tag0> pies! \t Ich mag Kuchen!```
+Where the numeric ID of the tag is drawn from a random distribution from the total number of tags. The probability asigned to the `Tags` modifier determines how likely is it for a tag augmentation to appear on any given word.
+
+Finally, if your corpus is augmented with alignment info, but you don't want to use any tags, just set the probability of this modifier to 0.
+
+### Generating vocabulary and tags before training
 In the future, this will be handled by a training Pipeline, but until then here's the basic scripts used
 
 For producing alignment augmented corpus use this script:
@@ -163,7 +173,7 @@ $spm_exec --bos_id=-1 --eos_id=0 --unk_id=1 ${placeholders} ${char_cov} ${prefix
 
 ## Future work
 
-- Terminology support (using a dictionary). We should augment the training data with terminology (possibly stemmed on the source side) so that we can use it real world models
+- Terminology support (using a dictionary), where augmentation happens not by using alignment scores but by taking values from a dictionary.
 - A one click run training
 
 # Acknowledgements
