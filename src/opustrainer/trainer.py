@@ -24,6 +24,7 @@ import yaml
 from opustrainer.modifiers import Modifier
 from opustrainer.modifiers.surface import UpperCaseModifier, TitleCaseModifier
 from opustrainer.modifiers.placeholders import PlaceholderTagModifier
+from opustrainer.modifiers.typos import TypoModifier
 
 def ignore_sigint():
     """Used as pre-exec hook for the trainer program as to ignore ctrl-c. We'll
@@ -43,6 +44,7 @@ MODIFIERS = {
     'UpperCase': UpperCaseModifier,
     'TitleCase': TitleCaseModifier,
     'Tags': PlaceholderTagModifier,
+    'Typos': TypoModifier,
 }
 
 @dataclass(frozen=True)
