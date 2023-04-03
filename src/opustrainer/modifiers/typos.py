@@ -1,9 +1,68 @@
 import random
-from typing import Dict, Literal
+import re
+from typing import Dict, Literal, Tuple
 
 import typo
 
 from opustrainer.modifiers import Modifier
+
+
+def random_space_with_alignment(action:Literal['add', 'remove'], strval:str, alignments:str, column:int=0) -> Tuple[str, str]:
+    """Special version of typo's random_space and skipped_space that also
+    updates alignment info.
+    
+    action: add | remove
+      whether to add or remove a random space
+
+    strval: str
+      input text
+
+    alignments: str
+      string of space split m-n pairs
+
+    column: int
+      either 0 or 1, decides which side of the alignment pairs is updated
+    """
+    # all the locations where there are non-space characters.
+    locations = [m.start() for m in re.finditer(r'\S', strval)]
+    
+    if len(locations) == 0:
+        return strval, alignments
+
+    # Select character after which to add a space
+    char_index = locations[random.randint(0, len(locations) - 1)]
+
+    # Figure out which word that character falls in
+    word_index = sum(1 for _ in re.finditer(r'\s+', strval[:char_index]))
+
+    # Insert space
+    if action == 'add':
+        strval = strval[:char_index] + ' ' + strval[char_index:]
+    else:
+        strval = strval[:char_index-1] + strval[char_index:]
+
+    # Fix up alignments
+    fixed_alignments = []
+    for alignment in alignments.split(' '):
+        # Splits the a-b pairs into tuples
+        mapping = [int(index) for index in alignment.split('-', maxsplit=1)]
+
+        # Alignments before the introduced space stay as-is. Intentionally, if
+        # the mapping is about word_index itself, we apply both to duplicate
+        # the mapping.
+        if mapping[column] <= word_index:
+            fixed_alignments.append(f'{mapping[0]}-{mapping[1]}')
+        
+        # Alignments after the space are shifted by 1
+        if action == 'add' and mapping[column] >= word_index \
+           or action == 'remove' and mapping[column] > word_index:
+            if action == 'add':
+                mapping[column] += 1
+            else:
+                mapping[column] -= 1
+            fixed_alignments.append(f'{mapping[0]}-{mapping[1]}')
+
+    return strval, ' '.join(fixed_alignments)
 
 
 class TypoModifier(Modifier):
@@ -85,9 +144,20 @@ class TypoModifier(Modifier):
         # workaround though.
         data = typo.StrErrer(fields[self.column], seed=random.getrandbits(32))
 
+        has_alignment_info = len(fields) > 2
+
         for modifier, probability in self.probabilities.items():
             if probability > random.random():
-                getattr(data, modifier)()
+                # Introducing spaces with alignment information is a problem.
+                if has_alignment_info and modifier == 'random_space' :
+                    data.result, fields[2] = random_space_with_alignment('add', data.result, fields[2], column=self.column)
+                elif has_alignment_info and modifier == 'skipped_space':
+                    data.result, fields[2] = random_space_with_alignment('remove', data.result, fields[2], column=self.column)
+                else:
+                    wordcount = len(data.result.split(' '))
+                    getattr(data, modifier)()
+                    assert len(data.result.split(' ')) == wordcount or not has_alignment_info, f'Modifier {modifier} changed the word count while alignment info was not updated'
+
 
         fields[self.column] = data.result
 
