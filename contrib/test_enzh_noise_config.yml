@@ -16,14 +16,11 @@ modifiers:
     num_tags: 6
     custom_detok_src: null # Null value for the src detokenizer
     custom_detok_trg: zh
-    template: " <tag{n}> {token} </tag{n}>" # This is the default way of inserting tags.
+    rand_augment: 0.4 # 0.4 out of the time tags is triggered, instead augment the source and the target with random noise
+    rand_replace: 0.4 # =====//=====, instead replace the target token with random noise, and use that random noise to tag a corresponding source word
+    # template: " <tag{n}> {token} </tag{n}>" # This is the default way of inserting tags.
     # We STRONGLY DISCOURAGE the modification of this line and in fact it shouldn't be included in the config
     # unless you really know what you are doing.
-    # Testing the parsing those values. The 0 means that whenever this modifier takes effect (probability 0.1)
-    # Out of those times, there's rand_augment % chance of using rand_augment instead of tags
-    # and rand_replace % chance of using rand_replace instead of tags.
-    rand_augment: 0
-    rand_replace: 0
 
 seed: 1111
 trainer: cat

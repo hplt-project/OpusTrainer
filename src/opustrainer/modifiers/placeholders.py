@@ -94,7 +94,7 @@ def get_random_unicode_string(min_length: int=2, max_length: int=10, max_words: 
        # (0x2A00, 0x2AFF), # Supplemental Mathematical Operators
        # (0x2B00, 0x2BFF), # Miscellaneous Symbols and Arrows
        # (0x2E80, 0x2EFF), # CJK Radicals Supplement
-       #  (0x2F00, 0x2FDF), # Kangxi Radicals
+       # (0x2F00, 0x2FDF), # Kangxi Radicals
        # (0x2FF0, 0x2FFF), # Ideographic Description Characters
        # (0x3000, 0x303F), # CJK Symbols and Punctuation
         (0x3040, 0x309F), # Hiragana
@@ -238,7 +238,7 @@ class PlaceholderTagModifier(Modifier):
 
     num_tags: int
     template: str
-    src_detokenizer: Optional[Detokenizer]
+    src_detokenizer: Detokenizer
     trg_detokenizer: Optional[Detokenizer]
     rand_augment: float
     rand_replace: float
@@ -272,12 +272,26 @@ class PlaceholderTagModifier(Modifier):
            detokenizer, but we can instead have separate detokenizers on src and trg."
         """
         # Selects mode of operation
-        def _select_mode():
+        def _select_mode() -> str:
             '''Selects the mode by calculating a probability from some results.
-            We want np.random.choice() but we don't want numpy dependency'''
+            We want np.random.choice() but we don't want numpy dependency.
+            Adapted from: https://stackoverflow.com/questions/59000464/why-is-my-implementation-of-numpy-random-choice-faster'''
             prob_tag: float = 1 - self.rand_augment - self.rand_replace
             prob_augment: float = self.rand_augment
             prob_replace: float = self.rand_replace
+
+            # It's a bit hacky but... This avoids modifying the random state when we don't have tag
+            if prob_tag == 1:
+                return "tag"
+
+            ret_types: List[str] = ["tag", "augment", "replace"]
+            # Accumulative list of probabilities so that we can
+            ret_prob: List[float] = [prob_tag, prob_tag + prob_augment, prob_tag + prob_augment + prob_replace]
+            rand = random.uniform(0, 1)
+            for i in range(len(ret_prob)):
+                if(rand < ret_prob[i]):
+                    return ret_types[i]
+            raise ValueError("We shouldn't be here, ever. Our probabilities did not sum up to 1?!")
 
         src, trg, alignment = line.strip().split('\t')
         source = src.split(' ')
@@ -302,13 +316,48 @@ class PlaceholderTagModifier(Modifier):
             # Skip words whose turn it isn't yet.
             if random.random() >= self.probability:
                 continue
+            
+            # Select mode
+            mode: str = _select_mode()
+            if mode == "tag":
 
-            # We run out of tags so no point of trying to tag anything else
-            if not tags:
-                break
+                # We run out of tags so no point of trying to tag anything else
+                if not tags:
+                    break
 
-            tag_id = tags.pop()
-            source[candidates[i][0]] = source[candidates[i][0]] + self.template.format(n=tag_id, token=target[candidates[i][1]])
+                tag_id = tags.pop()
+                source[candidates[i][0]] = source[candidates[i][0]] + self.template.format(n=tag_id, token=target[candidates[i][1]])
+            elif mode == "replace":
+                # We are doing a replace. This is very similar to the tag, except we replace the target side with
+                # random noise, the same random noise we generate on the source side. This encourages the model
+                # to really ignore the source and produce the target that we desire.
+                # Since we change the target side, we need to update "trg" IF trg_detokenizer is None
+                # We run out of tags so no point of trying to tag anything else
+                if not tags:
+                    break
+                
+                augment: str = get_random_unicode_string()
+                tag_id = tags.pop()
+                source[candidates[i][0]] = source[candidates[i][0]] + self.template.format(n=tag_id, token=augment)
+                # Update the target
+                target[candidates[i][1]] = augment
+
+                # Perform trivial detokenizer to update the trg if there's no detokenization rules
+                if self.trg_detokenizer is not None:
+                    trg = " ".join(target)
+            elif mode == "augment":
+                # Augment mode adds random noise both on the source and the target without any tagging
+                # encouraging the model to copy crap from one side to the other.
+
+                # Since we change the target side, we need to update "trg" IF trg_detokenizer is None
+                # We run out of tags so no point of trying to tag anything else
+                augment: str = get_random_unicode_string()
+                source[candidates[i][0]] = source[candidates[i][0]] + " " + augment + " "
+                target[candidates[i][1]] = target[candidates[i][1]] + " " + augment + " "
+
+                # Perform trivial detokenizer to update the trg if there's no detokenization rules
+                if self.trg_detokenizer is not None:
+                    trg = " ".join(target)
 
         source_detok: str = self.src_detokenizer.detokenize(source)
         if self.trg_detokenizer is not None:
