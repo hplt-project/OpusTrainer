@@ -1,3 +1,4 @@
+import random
 from typing import Dict
 
 import typo
@@ -22,7 +23,7 @@ class TypoModifier(Modifier):
 
     probabilities: Dict[str,float]
 
-    def __init__(self, probability:float, column:int = 0, **probabilities:Dict[str,float] = {}):
+    def __init__(self, probability:float, column:int = 0, **probabilities:float):
         """
         Apply typo modifiers to the input. If no specific typo modifiers are
         mentioned, it will default to applying them all with a 0.1 probability
@@ -68,11 +69,11 @@ class TypoModifier(Modifier):
 
         self.column = column
 
-        for modifier, probability in probabilities.items():
-            if modifier not in self.modifiers:
-                raise ValueError(f'Unknown typo modifier: {modifier}')
-            if probability < 0.0 or probability > 1.0:
-                raise ValueError(f'Typo modifier {modifier} has a probability out of the 0.0..1.0 range')
+        for mod, mod_prob in probabilities.items():
+            if mod not in self.modifiers:
+                raise ValueError(f'Unknown typo modifier: {mod}')
+            if mod_prob < 0.0 or mod_prob > 1.0:
+                raise ValueError(f'Typo modifier {mod} has a probability out of the 0.0..1.0 range')
 
         self.probabilities = probabilities or self.modifiers
 
