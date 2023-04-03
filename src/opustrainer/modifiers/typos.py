@@ -1,5 +1,5 @@
 import random
-from typing import Dict
+from typing import Dict, Literal
 
 import typo
 
@@ -23,7 +23,7 @@ class TypoModifier(Modifier):
 
     probabilities: Dict[str,float]
 
-    def __init__(self, probability:float, column:int = 0, **probabilities:float):
+    def __init__(self, probability:float, column:Literal['src', 'trg']='src', **probabilities:float):
         """
         Apply typo modifiers to the input. If no specific typo modifiers are
         mentioned, it will default to applying them all with a 0.1 probability
@@ -35,7 +35,7 @@ class TypoModifier(Modifier):
             probability: float
                 probability a line will be modified
 
-            column: int
+            column: 'src' | 'trg'
                 column to apply modifiers to. By default it is the first column.
 
             char_swap: float
@@ -67,7 +67,7 @@ class TypoModifier(Modifier):
         """
         super().__init__(probability)
 
-        self.column = column
+        self.column = ['src', 'trg'].index(column)
 
         for mod, mod_prob in probabilities.items():
             if mod not in self.modifiers:

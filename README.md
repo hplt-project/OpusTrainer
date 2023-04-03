@@ -71,7 +71,7 @@ modifiers:
 #   random_space:  0.1 # Adds a random space in the string.
 #   repeated_char: 0.1 # Repeats a random word character.
 #   unichar:       0.1 # Replaces a random consecutive repeated letter with a single letter. 
-#   column: 0 # In case you want to change the column these typos are introduced to.
+#   column: src # In case you want to change the column these typos are introduced to.
 
 seed: 1111
 trainer: /path/to/trainer/run.py
