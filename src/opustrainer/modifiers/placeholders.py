@@ -1,13 +1,24 @@
 import random
 from operator import itemgetter
-from typing import Set, List, Tuple, Optional, Protocol
+from typing import Set, List, Tuple, Optional, Protocol, TypeVar, Iterable
 
 from sacremoses import MosesDetokenizer
 
 from opustrainer.modifiers import Modifier
 
-#!/usr/bin/env python3
-import random
+
+T = TypeVar('T')
+
+def random_weighted_choice(options:Iterable[Tuple[T,float]]) -> T:
+    choice = random.random()
+    cumsum = 0
+    for option, prob in options:
+        cumsum += prob
+        if choice < cumsum:
+            return option
+    raise RuntimeError('random_weighted_choice called with cumulative sum smaller than 1.0')
+
+
 
 def get_random_unicode_string(min_length: int=2, max_length: int=10, max_words: int=3) -> str:
     """Gets a random unicode string of words, of up to max_words, where each word is of length
@@ -146,15 +157,14 @@ def get_random_unicode_string(min_length: int=2, max_length: int=10, max_words: 
        # (0xE0000, 0xE007F), # Tags
     ]
     # Select a character set
-    my_alphabet = include_ranges[random.randrange(0, len(include_ranges))]
-    # include an alphabet
-    alphabet = [chr(code_point) for code_point in range(my_alphabet[0], my_alphabet[1])]
-
+    alphabet = random.choice(include_ranges)
+    
     # Generate a random string of 1 - 3 words
-    output = ""
-    for i in range(random.randint(1, max_words)):
-        output = output + ''.join(random.choice(alphabet) for i in range(length)) + " "
-    return output[:-1]
+    return ' '.join(
+        ''.join(chr(random.randrange(*alphabet)) for _ in range(length))
+        for _ in range(random.randint(1, max_words))
+    )
+
 
 def tuplify(pair: str) -> Tuple[int, int]:
     """Parses "x-y" description of an aligned token pair into `(x,y)` tuple of ints."""
@@ -231,21 +241,20 @@ class PlaceholderTagModifier(Modifier):
          custom_detok_src: 'zh'
          custom_detok_trg: null
          template: " <tag{n}> {token} </tag{n}>"
-         rand_augmnet: 0.2 # 20% of the times the function is invoked we perform rand_augment
-         rand_replace: 0.2 # 20% of the times the function is invoked we perform rand_repace
+         augment: 0.0 # 0% chance to just insert a random string on both sides
+         replace: 0.0 # 0% change to use tags to force translate to a random string
         ```
     """
 
     num_tags: int
     template: str
     src_detokenizer: Detokenizer
-    trg_detokenizer: Optional[Detokenizer]
-    rand_augment: float
-    rand_replace: float
+    trg_detokenizer: Detokenizer
+    modes: List[Tuple[str,float]]
 
     def __init__(self, probability: float=0.0, num_tags: int=6,
         custom_detok_src: Optional[str]=None, custom_detok_trg: Optional[str]=None,
-        template: str=" <tag{n}> {token} </tag{n}>", rand_augment: float=0, rand_replace:float=0):
+        template: str=" <tag{n}> {token} </tag{n}>", augment: float=0, replace:float=0):
         super().__init__(probability)
 
         self.num_tags = num_tags
@@ -259,11 +268,20 @@ class PlaceholderTagModifier(Modifier):
         if custom_detok_trg:
             self.trg_detokenizer = MosesDetokenizer(lang=custom_detok_trg)
         else:
-            self.trg_detokenizer = None
+            self.trg_detokenizer = SpaceDetokenizer()
 
-        self.rand_augment = rand_augment
-        self.rand_replace = rand_replace
+        self.modes = []
 
+        if augment + replace > 1.0:
+            raise ValueError('sum of augment and replace probability should not exceed 1.0')
+
+        if augment > 0:
+            self.modes.append(('augment', augment))
+
+        if replace > 0:
+            self.modes.append(('replace', replace))
+
+        self.modes.append(('tag', 1.0)) # Weight doesn't matter as long as cumsum => 1.0, it's last on the list anyway
 
     def __call__(self, line:str) -> str:
         """Applies tag to words in a line based on alignment info, and then removes the alignment info from the line.
@@ -271,27 +289,6 @@ class PlaceholderTagModifier(Modifier):
            eg "I like cake" would become "I like <tag0> gusta </tag0> cake. By default the detokenizer used is the trivial
            detokenizer, but we can instead have separate detokenizers on src and trg."
         """
-        # Selects mode of operation
-        def _select_mode() -> str:
-            '''Selects the mode by calculating a probability from some results.
-            We want np.random.choice() but we don't want numpy dependency.
-            Adapted from: https://stackoverflow.com/questions/59000464/why-is-my-implementation-of-numpy-random-choice-faster'''
-            prob_tag: float = 1 - self.rand_augment - self.rand_replace
-            prob_augment: float = self.rand_augment
-            prob_replace: float = self.rand_replace
-
-            # It's a bit hacky but... This avoids modifying the random state when we don't have tag
-            if prob_tag == 1:
-                return "tag"
-
-            ret_types: List[str] = ["tag", "augment", "replace"]
-            # Accumulative list of probabilities so that we can
-            ret_prob: List[float] = [prob_tag, prob_tag + prob_augment, prob_tag + prob_augment + prob_replace]
-            rand = random.uniform(0, 1)
-            for i in range(len(ret_prob)):
-                if(rand < ret_prob[i]):
-                    return ret_types[i]
-            raise ValueError("We shouldn't be here, ever. Our probabilities did not sum up to 1?!")
 
         src, trg, alignment = line.strip().split('\t')
         source = src.split(' ')
@@ -317,51 +314,32 @@ class PlaceholderTagModifier(Modifier):
             if random.random() >= self.probability:
                 continue
             
-            # Select mode
-            mode: str = _select_mode()
+            # Select mode (skip random_weighted_choices*() when 'tag' is the only mode)
+            mode = random_weighted_choice(self.modes) if len(self.modes) > 1 else 'tag'
+
+            # If we'd need a tag but we ran out of them, skip.
+            if (mode == "tag" or mode == "replace") and not tags:
+                continue
+
             if mode == "tag":
-
-                # We run out of tags so no point of trying to tag anything else
-                if not tags:
-                    break
-
-                tag_id = tags.pop()
-                source[candidates[i][0]] = source[candidates[i][0]] + self.template.format(n=tag_id, token=target[candidates[i][1]])
+                # Hint the expected output to the trainer by specifying it in the input as a tag
+                source[candidates[i][0]] += self.template.format(n=tags.pop(), token=target[candidates[i][1]])
             elif mode == "replace":
-                # We are doing a replace. This is very similar to the tag, except we replace the target side with
-                # random noise, the same random noise we generate on the source side. This encourages the model
-                # to really ignore the source and produce the target that we desire.
-                # Since we change the target side, we need to update "trg" IF trg_detokenizer is None
-                # We run out of tags so no point of trying to tag anything else
-                if not tags:
-                    break
-                
-                augment: str = get_random_unicode_string()
-                tag_id = tags.pop()
-                source[candidates[i][0]] = source[candidates[i][0]] + self.template.format(n=tag_id, token=augment)
-                # Update the target
+                # Same as above, but instead of the expected target word, we replace it on both
+                # sides with a random string. This encourages the model to really ignore the source
+                # and produce the target that we desire.
+                augment = get_random_unicode_string()
+                source[candidates[i][0]] += self.template.format(n=tags.pop(), token=augment)
                 target[candidates[i][1]] = augment
-
-                # Perform trivial detokenizer to update the trg if there's no detokenization rules
-                if self.trg_detokenizer is not None:
-                    trg = " ".join(target)
             elif mode == "augment":
-                # Augment mode adds random noise both on the source and the target without any tagging
-                # encouraging the model to copy crap from one side to the other.
+                # Augment mode adds random noise both on the source and the target without any
+                # tagging encouraging the model to copy crap from one side to the other.
+                augment = get_random_unicode_string()
+                source[candidates[i][0]] = source[candidates[i][0]] + " " + augment
+                target[candidates[i][1]] = target[candidates[i][1]] + " " + augment
 
-                # Since we change the target side, we need to update "trg" IF trg_detokenizer is None
-                # We run out of tags so no point of trying to tag anything else
-                augment: str = get_random_unicode_string()
-                source[candidates[i][0]] = source[candidates[i][0]] + " " + augment + " "
-                target[candidates[i][1]] = target[candidates[i][1]] + " " + augment + " "
-
-                # Perform trivial detokenizer to update the trg if there's no detokenization rules
-                if self.trg_detokenizer is not None:
-                    trg = " ".join(target)
-
-        source_detok: str = self.src_detokenizer.detokenize(source)
-        if self.trg_detokenizer is not None:
-            trg = self.trg_detokenizer.detokenize(target)
+        source_detok = self.src_detokenizer.detokenize(source)
+        target_detok = self.trg_detokenizer.detokenize(target)
 
         # Return the sentence, source tagged a la Dinu et al, target as it is and no alignment info
-        return  source_detok + "\t" + trg
+        return  source_detok + "\t" + target_detok

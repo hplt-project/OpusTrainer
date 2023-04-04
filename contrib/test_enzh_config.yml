@@ -20,10 +20,10 @@ modifiers:
     # We STRONGLY DISCOURAGE the modification of this line and in fact it shouldn't be included in the config
     # unless you really know what you are doing.
     # Testing the parsing those values. The 0 means that whenever this modifier takes effect (probability 0.1)
-    # Out of those times, there's rand_augment % chance of using rand_augment instead of tags
-    # and rand_replace % chance of using rand_replace instead of tags.
-    rand_augment: 0
-    rand_replace: 0
+    # Out of those times, there's `augment` fraction of chance of adding untagged noise to both sides instead of tags
+    # and `replace` fraction of chance of adding placeholder tags, but replace the expected target with noise.
+    augment: 0
+    replace: 0
 
 seed: 1111
 trainer: cat
