@@ -396,10 +396,16 @@ class CurriculumV1Loader:
             custom_detok_trg: zh
         ```
         """
-        return [
+        modifiers = [
             self._load_modifier(modifier_entry)
             for modifier_entry in ymldata.get('modifiers', [])
         ]
+
+        for modifier in modifiers:
+            modifier.validate(modifiers)
+
+        return modifiers
+
 
     def _load_modifier(self, modifier_entry: Dict[str, Any]) -> Modifier:
         settings: Dict[str, Any] = {}

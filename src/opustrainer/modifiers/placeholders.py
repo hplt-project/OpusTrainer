@@ -1,6 +1,7 @@
 import random
 from operator import itemgetter
 from typing import Set, List, Tuple, Optional, Protocol
+from warnings import warn
 
 from sacremoses import MosesDetokenizer
 
@@ -152,3 +153,10 @@ class PlaceholderTagModifier(Modifier):
 
         # Return the sentence, source tagged a la Dinu et al, target as it is and no alignment info
         return  source_detok + "\t" + trg
+
+    def validate(self, context:List[Modifier]) -> None:
+        """Current limitation of the tags modifier is that any other modifier might modify the
+        inserted tags, which we don't want. So warn users about that if we notice it.
+        """
+        if context[-1] != self:
+            warn('Tags modifier should to be the last modifier to be applied, as otherwise other modifiers might alter the inserted tags themselves.')
