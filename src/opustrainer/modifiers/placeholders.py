@@ -1,5 +1,5 @@
 import random
-from operator import itemgetter
+from operator import attrgetter
 from typing import Set, List, Tuple, Optional, Protocol, TypeVar, Iterable
 
 from sacremoses import MosesDetokenizer
@@ -20,7 +20,7 @@ def random_weighted_choice(options:Iterable[Tuple[T,float]]) -> T:
 
 
 
-def get_random_unicode_string(min_length: int=2, max_length: int=10, max_words: int=3) -> str:
+def get_random_unicode_strings(min_length: int=2, max_length: int=10, max_words: int=3) -> List[str]:
     """Gets a random unicode string of words, of up to max_words, where each word is of length
     min_length-max_length. Only one character set per invocation.
     Maybe should do special rules for emoji and CJK? Emoji wouldn't appear with spaces in between normally
@@ -160,60 +160,85 @@ def get_random_unicode_string(min_length: int=2, max_length: int=10, max_words: 
     alphabet = random.choice(include_ranges)
     
     # Generate a random string of 1 - 3 words
-    return ' '.join(
+    return [
         ''.join(chr(random.randrange(*alphabet)) for _ in range(length))
         for _ in range(random.randint(1, max_words))
-    )
+    ]
 
 
-def tuplify(pair: str) -> Tuple[int, int]:
-    """Parses "x-y" description of an aligned token pair into `(x,y)` tuple of ints."""
-    s, t = pair.split('-')
-    return (int(s), int(t))
+class Pair:
+    """Alignment pair. Tuple, but mutable so we can fix them up when we add words."""
+    src: int
+    trg: int
+
+    __slots__ = ('src', 'trg')
+
+    def __init__(self, src:int, trg:int):
+        self.src = src
+        self.trg = trg
+
+    def __hash__(self):
+        """Risky for mutable types, but we need it for set operations"""
+        return hash((self.src, self.trg))
+
+    def __eq__(self, other):
+        return self.src == other.src and self.trg == other.trg
 
 
-def filter_tuples(inlist: List[Tuple[int, int]]) -> List[Tuple[int, int]]:
+def parse_alignment(pair:str) -> Pair:
+    src, trg = pair.split('-', maxsplit=1)
+    return Pair(int(src), int(trg))
+
+
+def parse_alignments(align_line:str) -> List[Pair]:
+    return [parse_alignment(pair) for pair in align_line.split()]
+
+
+def format_alignments(alignments:List[Pair]) -> str:
+    return ' '.join(f'{pair.src}-{pair.trg}' for pair in alignments)
+
+
+def filter_one_to_one_pairs(inlist: List[Pair]) -> List[Pair]:
     """Removes places non x->y x->z type of alignments. Remove anything that is found multiple
        times. Anything that is found multiple times means non bijective alignment. Since they
        are sorted, we can reduce some time complexity
     """
-    inlist.sort(key=itemgetter(0))
-    new_list: List[Tuple[int, int]] = []
+    inlist.sort(key=attrgetter('src'))
+    new_list: List[Pair] = []
     blacklisted: Set[int] = set()
-    for i, (curr, _) in enumerate(inlist):
+    for i, pair in enumerate(inlist):
         # Skip blacklisted ones
-        if curr in blacklisted:
+        if pair.src in blacklisted:
             continue
         
         # Skip (and blacklist) any (x,y) pairs that are followed by (x,_) pairs
-        if i < len(inlist) - 1 and curr == inlist[i+1][0]:
-            blacklisted.add(curr)
+        if i < len(inlist) - 1 and pair.src == inlist[i+1].src:
+            blacklisted.add(pair.src)
             continue
 
         # Keep the rest, pairs like (x,_) where `x` did only occur once in the
         # first position among all of the tuples in `inlist`.
-        new_list.append(inlist[i])
+        new_list.append(pair)
     return new_list
 
 
-def get_placeholding_candidates(align_line: str) -> List[Tuple[int, int]]:
+def get_placeholding_candidates(src_trg: List[Pair]) -> List[Pair]:
     """Filters out multiple alignment targets so that we can definitely get a one-to-one
        replacement
     """
     # Create the two src-trg and trg-src sets
-    src_trg: List[Tuple[int, int]] = [tuplify(i) for i in align_line.split()]
-    trg_src: List[Tuple[int, int]] = [(c, d) for d,c in src_trg]
+    trg_src: List[Pair] = [Pair(pair.trg, pair.src) for pair in src_trg]
 
-    src_trg_filtered: List[Tuple[int, int]] = filter_tuples(src_trg)
-    trg_src_filtered: List[Tuple[int, int]] = filter_tuples(trg_src)
+    src_trg_filtered: List[Pair] = filter_one_to_one_pairs(src_trg)
+    trg_src_filtered: List[Pair] = filter_one_to_one_pairs(trg_src)
 
     # Now, we are looking for the union of the two.
     # First, reverse src_trg
-    trg_src_filtered_rereversed: List[Tuple[int, int]] = [(c, d) for d,c in trg_src_filtered]
+    trg_src_filtered_rereversed: List[Pair] = [Pair(pair.trg, pair.src) for pair in trg_src_filtered]
 
     # Now convert both to sets and take the union
-    src_trg_set: Set[Tuple[int, int]] = set(src_trg_filtered)
-    trg_src_filtered_rereversed_set: Set[Tuple[int, int]] = set(trg_src_filtered_rereversed)
+    src_trg_set: Set[Pair] = set(src_trg_filtered)
+    trg_src_filtered_rereversed_set: Set[Pair] = set(trg_src_filtered_rereversed)
 
     return list(src_trg_set & trg_src_filtered_rereversed_set)
 
@@ -254,7 +279,7 @@ class PlaceholderTagModifier(Modifier):
 
     def __init__(self, probability: float=0.0, num_tags: int=6,
         custom_detok_src: Optional[str]=None, custom_detok_trg: Optional[str]=None,
-        template: str=" <tag{n}> {token} </tag{n}>", augment: float=0, replace:float=0):
+        template: str="<tag{n}> {token} </tag{n}>", augment: float=0, replace:float=0):
         super().__init__(probability)
 
         self.num_tags = num_tags
@@ -294,8 +319,10 @@ class PlaceholderTagModifier(Modifier):
         source = src.split(' ')
         target = trg.split(' ')
 
+        alignments: List[Pair] = parse_alignments(alignment)
+
         # Get replacement candidates
-        candidates: List[Tuple[int, int]] = get_placeholding_candidates(alignment)
+        candidates = get_placeholding_candidates(alignments)
 
         # Get list of possible tags.
         tags: List[int] = list(range(self.num_tags))
@@ -305,9 +332,9 @@ class PlaceholderTagModifier(Modifier):
 
         # Replace each of them with a THRESHOLD probability unless the two words are exactly the same
         # This is to avoid having numbers trained with placeholders or any other words that are exactly the same
-        for i in range(len(candidates)):
-            # Skip words that are the same on 
-            if source[candidates[i][0]] == target[candidates[i][1]]:
+        for candidate in candidates:
+            # Skip words that are already the same in the source and target sentence
+            if source[candidate.src] == target[candidate.trg]:
                 continue
 
             # Skip words whose turn it isn't yet.
@@ -323,23 +350,64 @@ class PlaceholderTagModifier(Modifier):
 
             if mode == "tag":
                 # Hint the expected output to the trainer by specifying it in the input as a tag
-                source[candidates[i][0]] += self.template.format(n=tags.pop(), token=target[candidates[i][1]])
+                tag_tokens = self.template.format(n=tags.pop(), token=target[candidate.trg]).split(' ')
+                source = source[:candidate.src+1] + tag_tokens + source[candidate.src+1:] # Both +1 to insert tag_tokens after selected token
+                
+                # Fix up alignment pairs
+                for pair in alignments:
+                    if pair.src > candidate.src:
+                        pair.src += len(tag_tokens)
+            
             elif mode == "replace":
                 # Same as above, but instead of the expected target word, we replace it on both
                 # sides with a random string. This encourages the model to really ignore the source
                 # and produce the target that we desire.
-                augment = get_random_unicode_string()
-                source[candidates[i][0]] += self.template.format(n=tags.pop(), token=augment)
-                target[candidates[i][1]] = augment
+                augment_tokens = get_random_unicode_strings()
+                tag_tokens = self.template.format(n=tags.pop(), token=' '.join(augment_tokens)).split(' ')
+                source = source[:candidate.src+1] + tag_tokens + source[candidate.src+1:] # Both +1 to insert tag after selected token
+                target = target[:candidate.trg] + augment_tokens + target[candidate.trg+1:] # Only tail +1 to replace the selected target token
+
+                # Fix up alignment pairs
+                for pair in alignments:
+                    if pair.src > candidate.src:
+                        pair.src += len(tag_tokens)
+                    if pair.trg > candidate.trg:
+                        pair.trg += len(augment_tokens) - 1 # -1 because we replaced the target token
+
+                # Add alignment pairs for the 1-to-N alignment pairs
+                index = alignments.index(candidate)
+                augment_pairs = [
+                    Pair(candidate.src, candidate.trg + i)
+                    for i in range(0, len(augment_tokens))
+                ]
+                alignments = alignments[:index] + augment_pairs + alignments[index+1:] # +1 to replace the original pair
+
             elif mode == "augment":
                 # Augment mode adds random noise both on the source and the target without any
                 # tagging encouraging the model to copy crap from one side to the other.
-                augment = get_random_unicode_string()
-                source[candidates[i][0]] = source[candidates[i][0]] + " " + augment
-                target[candidates[i][1]] = target[candidates[i][1]] + " " + augment
+                augment_tokens = get_random_unicode_strings()
+                source = source[:candidate.src+1] + augment_tokens + source[candidate.src+1:]
+                target = target[:candidate.trg+1] + augment_tokens + target[candidate.trg+1:]
+
+                # Fix up alignments for both source and target sides
+                for pair in alignments:
+                    if pair.src > candidate.src:
+                        pair.src += len(augment_tokens)
+                    if pair.trg > candidate.trg:
+                        pair.trg += len(augment_tokens)
+
+                # Also insert alignments for the augmented string
+                augment_pairs = [
+                    Pair(candidate.src + i, candidate.trg + i)
+                    for i in range(1, 1 + len(augment_tokens))
+                ]
+                
+                # Insert them after the alignment pair we used to select this place.
+                index = alignments.index(candidate)
+                alignments = alignments[:index+1] + augment_pairs + alignments[index+1:]
 
         source_detok = self.src_detokenizer.detokenize(source)
         target_detok = self.trg_detokenizer.detokenize(target)
 
         # Return the sentence, source tagged a la Dinu et al, target as it is and no alignment info
-        return  source_detok + "\t" + target_detok
+        return  source_detok + "\t" + target_detok + "\t" + format_alignments(alignments)
