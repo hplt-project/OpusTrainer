@@ -42,7 +42,7 @@ class TestTagger(unittest.TestCase):
 	def test_tagger_zh_src_augment_replace(self):
 		'''Tests the tagger with zh on the source side'''
 		random.seed(1)
-		tagger = PlaceholderTagModifier(probability=0.6, num_tags=4, custom_detok_src='zh', custom_detok_trg='None',
+		tagger = PlaceholderTagModifier(probability=0.6, num_tags=4, custom_detok_src='zh', custom_detok_trg=None,
 				  template=" <tag{n}> {token} </tag{n}>", augment=0.4, replace=0.4)
 		with open('contrib/test-data/clean.zhen.10', 'r', encoding='utf-8') as myinput, \
 		     open('contrib/test-data/clean.zhen.ref.06.4.04.04.src', 'r', encoding='utf-8') as reference:
