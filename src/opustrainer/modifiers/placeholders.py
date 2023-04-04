@@ -139,12 +139,7 @@ class PlaceholderTagModifier(Modifier):
             if random.random() >= self.probability:
                 continue
 
-            # We run out of tags so no point of trying to tag anything else
-            if not tags:
-                break
-
-            tag_id = tags.pop()
-            source[candidates[i][0]] = source[candidates[i][0]] + self.template.format(n=tag_id, token=target[candidates[i][1]])
+            source[candidates[i][0]] = "<tag2> " + source[candidates[i][0]]  + " </tag2> "+ self.template.format(n=0, token=target[candidates[i][1]])
 
         source_detok: str = self.src_detokenizer.detokenize(source)
         if self.trg_detokenizer is not None:
