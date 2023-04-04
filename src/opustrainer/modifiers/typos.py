@@ -7,7 +7,7 @@ import typo
 from opustrainer.modifiers import Modifier
 
 
-def random_space_with_alignment(action:Literal['add', 'remove'], strval:str, alignments:str, column:int=0) -> Tuple[str, str]:
+def random_space_with_alignment(action:Literal['random_space', 'skipped_space'], strval:str, alignments:str) -> Tuple[str, str]:
     """Special version of typo's random_space and skipped_space that also
     updates alignment info.
     
@@ -20,8 +20,6 @@ def random_space_with_alignment(action:Literal['add', 'remove'], strval:str, ali
     alignments: str
       string of space split m-n pairs
 
-    column: int
-      either 0 or 1, decides which side of the alignment pairs is updated
     """
     # all the locations where there are non-space characters.
     locations = [m.start() for m in re.finditer(r'\S', strval)]
@@ -36,7 +34,7 @@ def random_space_with_alignment(action:Literal['add', 'remove'], strval:str, ali
     word_index = sum(1 for _ in re.finditer(r'\s+', strval[:char_index]))
 
     # Insert space
-    if action == 'add':
+    if action == 'random_space':
         strval = strval[:char_index] + ' ' + strval[char_index:]
     else:
         strval = strval[:char_index-1] + strval[char_index:]
@@ -45,22 +43,19 @@ def random_space_with_alignment(action:Literal['add', 'remove'], strval:str, ali
     fixed_alignments = []
     for alignment in alignments.split(' '):
         # Splits the a-b pairs into tuples
-        mapping = [int(index) for index in alignment.split('-', maxsplit=1)]
+        src, trg = [int(index) for index in alignment.split('-', maxsplit=1)]
 
         # Alignments before the introduced space stay as-is. Intentionally, if
         # the mapping is about word_index itself, we apply both to duplicate
         # the mapping.
-        if mapping[column] <= word_index:
-            fixed_alignments.append(f'{mapping[0]}-{mapping[1]}')
+        if src <= word_index:
+            fixed_alignments.append(f'{src}-{trg}')
         
         # Alignments after the space are shifted by 1
-        if action == 'add' and mapping[column] >= word_index \
-           or action == 'remove' and mapping[column] > word_index:
-            if action == 'add':
-                mapping[column] += 1
-            else:
-                mapping[column] -= 1
-            fixed_alignments.append(f'{mapping[0]}-{mapping[1]}')
+        if action == 'random_space' and src >= word_index \
+           or action == 'skipped_space' and src > word_index:
+            src += 1 if action == 'random_space' else -1
+            fixed_alignments.append(f'{src}-{trg}')
 
     return strval, ' '.join(fixed_alignments)
 
@@ -82,7 +77,7 @@ class TypoModifier(Modifier):
 
     probabilities: Dict[str,float]
 
-    def __init__(self, probability:float, column:Literal['src', 'trg']='src', **probabilities:float):
+    def __init__(self, probability:float, **probabilities:float):
         """
         Apply typo modifiers to the input. If no specific typo modifiers are
         mentioned, it will default to applying them all with a 0.1 probability
@@ -93,9 +88,6 @@ class TypoModifier(Modifier):
         args:
             probability: float
                 probability a line will be modified
-
-            column: 'src' | 'trg'
-                column to apply modifiers to. By default it is the first column.
 
             char_swap: float
                 Swaps two random consecutive word characters in the string.
@@ -126,8 +118,6 @@ class TypoModifier(Modifier):
         """
         super().__init__(probability)
 
-        self.column = ['src', 'trg'].index(column)
-
         for mod, mod_prob in probabilities.items():
             if mod not in self.modifiers:
                 raise ValueError(f'Unknown typo modifier: {mod}')
@@ -142,23 +132,21 @@ class TypoModifier(Modifier):
         # TODO: The StrErrer constructor calls random.seed(None), which isn't
         # great for reproducibility. Not sure whether getrandbits() is a good
         # workaround though.
-        data = typo.StrErrer(fields[self.column], seed=random.getrandbits(32))
+        data = typo.StrErrer(fields[0], seed=random.getrandbits(32))
 
         has_alignment_info = len(fields) > 2
 
         for modifier, probability in self.probabilities.items():
             if probability > random.random():
                 # Introducing spaces with alignment information is a problem.
-                if has_alignment_info and modifier == 'random_space' :
-                    data.result, fields[2] = random_space_with_alignment('add', data.result, fields[2], column=self.column)
-                elif has_alignment_info and modifier == 'skipped_space':
-                    data.result, fields[2] = random_space_with_alignment('remove', data.result, fields[2], column=self.column)
+                if has_alignment_info and modifier in ('random_space', 'skipped_space'):
+                    data.result, fields[2] = random_space_with_alignment(modifier, data.result, fields[2])
                 else:
                     wordcount = len(data.result.split(' '))
                     getattr(data, modifier)()
                     assert len(data.result.split(' ')) == wordcount or not has_alignment_info, f'Modifier {modifier} changed the word count while alignment info was not updated'
 
 
-        fields[self.column] = data.result
+        fields[0] = data.result
 
         return "\t".join(fields)
