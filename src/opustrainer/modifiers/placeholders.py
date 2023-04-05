@@ -239,8 +239,12 @@ def get_placeholding_candidates(src_trg: List[Pair]) -> List[Pair]:
     # Now convert both to sets and take the union
     src_trg_set: Set[Pair] = set(src_trg_filtered)
     trg_src_filtered_rereversed_set: Set[Pair] = set(trg_src_filtered_rereversed)
+    selection = src_trg_set & trg_src_filtered_rereversed_set
 
-    return list(src_trg_set & trg_src_filtered_rereversed_set)
+    # Little dance to make sure we return the original pair instances, not any
+    # of the reversed reversed ones. This also sorts them back into the original
+    # order.
+    return [pair for pair in src_trg if pair in selection]
 
 
 class Detokenizer(Protocol):
