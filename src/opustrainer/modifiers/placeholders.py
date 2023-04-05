@@ -184,6 +184,9 @@ class Pair:
     def __eq__(self, other):
         return self.src == other.src and self.trg == other.trg
 
+    def __repr__(self):
+        return f'{self.src}-{self.trg}'
+
 
 def parse_alignment(pair:str) -> Pair:
     src, trg = pair.split('-', maxsplit=1)
