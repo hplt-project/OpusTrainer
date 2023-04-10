@@ -20,7 +20,7 @@ def random_weighted_choice(options:Iterable[Tuple[T,float]]) -> T:
 
 
 
-def get_random_unicode_string(min_length: int=2, max_length: int=10, max_words: int=3) -> str:
+def get_random_unicode_string(min_length: int=1, max_length: int=4, max_words: int=3) -> str:
     """Gets a random unicode string of words, of up to max_words, where each word is of length
     min_length-max_length. Only one character set per invocation.
     Maybe should do special rules for emoji and CJK? Emoji wouldn't appear with spaces in between normally

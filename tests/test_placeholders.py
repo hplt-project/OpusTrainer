@@ -16,13 +16,13 @@ class TestTagger(unittest.TestCase):
 		random.seed(1)
 		tagger = PlaceholderTagModifier(probability=1, augment=1)
 		output = tagger('Hello world\tHallo Welt\t0-0 1-1')
-		self.assertEqual(output, 'Hello ॸऍॳनःं ः॓ॅँॸ॰ रॗछॼशड़ world ټ؇ۤە٣ٮڛۃ\tHallo ॸऍॳनःं ः॓ॅँॸ॰ रॗछॼशड़ Welt ټ؇ۤە٣ٮڛۃ')
+		self.assertEqual(output, '''Hello ゜ そ world ټ؇ۤە	Hallo ゜ そ Welt ټ؇ۤە''')
 
 	def test_tagger_replace(self):
 		random.seed(1)
 		tagger = PlaceholderTagModifier(probability=.5, replace=1)
 		output = tagger('Hello world\tHallo Welt\t0-0 1-1')
-		self.assertEqual(output, 'Hello world <tag1> ټ؇ۤە٣ٮڛۃ </tag1>\tHallo ټ؇ۤە٣ٮڛۃ')
+		self.assertEqual(output, '''Hello <tag4> ゜ そ </tag4> world <tag1> ټ؇ۤە </tag1>	゜ そ ټ؇ۤە''')
 
 	def test_tagger_zh_src(self):
 		'''Tests the tagger with zh on the source side'''
