@@ -12,6 +12,7 @@ start:
 modifiers:
   - UpperCase: 0.2
   - TitleCase: 0.2
+  - Typos: 0.2
   - Tags: 0.1
     num_tags: 6
     custom_detok_src: null # Null value for the src detokenizer

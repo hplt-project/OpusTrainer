@@ -24,6 +24,7 @@ import yaml
 from opustrainer.modifiers import Modifier
 from opustrainer.modifiers.surface import UpperCaseModifier, TitleCaseModifier
 from opustrainer.modifiers.placeholders import PlaceholderTagModifier
+from opustrainer.modifiers.typos import TypoModifier
 
 def ignore_sigint():
     """Used as pre-exec hook for the trainer program as to ignore ctrl-c. We'll
@@ -43,6 +44,7 @@ MODIFIERS = {
     'UpperCase': UpperCaseModifier,
     'TitleCase': TitleCaseModifier,
     'Tags': PlaceholderTagModifier,
+    'Typos': TypoModifier,
 }
 
 @dataclass(frozen=True)
@@ -394,10 +396,16 @@ class CurriculumV1Loader:
             custom_detok_trg: zh
         ```
         """
-        return [
+        modifiers = [
             self._load_modifier(modifier_entry)
             for modifier_entry in ymldata.get('modifiers', [])
         ]
+
+        for modifier in modifiers:
+            modifier.validate(modifiers)
+
+        return modifiers
+
 
     def _load_modifier(self, modifier_entry: Dict[str, Any]) -> Modifier:
         settings: Dict[str, Any] = {}
