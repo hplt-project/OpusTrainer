@@ -59,9 +59,10 @@ modifiers:
   #  custom_detok_trg: zh
   #  # template: " <tag{n}> {token} </tag{n}>" # This is the default way of inserting tags. Beware of changing it.
                                                # DO NOT include it in the config as it's a default parameter.
-# - Typos: 0.05 # Modify 5% of the input sentences to contain plausible typos.
-#               # You can specify which modifiers to apply, or just apply them
-#               # all at random by default.
+# - Typos: 0.05 # Consider 5% of the input sentences to contain plausible typos.
+#               # You can specify which modifiers to apply, or just apply each
+#               # of them with a default 10% probability that a particular
+#               # modifier is applied once to the sentence that is considered.
 #   char_swap:     0.1 # Swaps two random consecutive word characters in the string.
 #   missing_char:  0.1 # Skips a random word character in the string.
 #   extra_char:    0.1 # Adds an extra, keyboard-neighbor, letter next to a random word character.
