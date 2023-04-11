@@ -59,6 +59,19 @@ modifiers:
   #  custom_detok_trg: zh
   #  # template: " <tag{n}> {token} </tag{n}>" # This is the default way of inserting tags. Beware of changing it.
                                                # DO NOT include it in the config as it's a default parameter.
+# - Typos: 0.05 # Consider 5% of the input sentences to contain plausible typos.
+#               # You can specify which modifiers to apply, or just apply each
+#               # of them with a default 10% probability that a particular
+#               # modifier is applied once to the sentence that is considered.
+#   char_swap:     0.1 # Swaps two random consecutive word characters in the string.
+#   missing_char:  0.1 # Skips a random word character in the string.
+#   extra_char:    0.1 # Adds an extra, keyboard-neighbor, letter next to a random word character.
+#   nearby_char:   0.1 # Replaces a random word character with keyboard-neighbor letter.
+#   similar_char:  0.1 # Replaces a random word character with another visually similar character.
+#   skipped_space: 0.1 # Skips a random space from the string.
+#   random_space:  0.1 # Adds a random space in the string.
+#   repeated_char: 0.1 # Repeats a random word character.
+#   unichar:       0.1 # Replaces a random consecutive repeated letter with a single letter. 
 
 seed: 1111
 trainer: /path/to/trainer/run.py
