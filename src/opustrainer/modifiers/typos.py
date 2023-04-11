@@ -61,6 +61,9 @@ def random_space_with_alignment(action:Literal['random_space', 'skipped_space'],
 
 
 class TypoModifier(Modifier):
+    # modifier name, and probability it is applied on a considered
+    # sentence. Each modifier can either be applied once or not at all
+    # for a considered sentence. The default probability for each is 10%.
     modifiers = {
         'char_swap':     0.1,
         'missing_char':  0.1,
