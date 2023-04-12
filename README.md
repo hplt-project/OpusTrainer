@@ -72,6 +72,16 @@ modifiers:
 #   random_space:  0.1 # Adds a random space in the string.
 #   repeated_char: 0.1 # Repeats a random word character.
 #   unichar:       0.1 # Replaces a random consecutive repeated letter with a single letter. 
+#
+## Prefix modifier. Prepends a random subsection of the target sentence before the source sentence. Useful for teaching
+## the model to force decode a specific string if the user is absolutely certain it has to appear in the output.
+## For example "I like pie. Me gustan los pasteles."
+## Becomes "__start__ los pasteles __end__ I like pie. Me gustan los pasteles.
+#  - Prefix: 0.5 # Prefix must always be used after "Tags", but ideally never used together with "Tags"
+#    min_words: 2
+#    max_words: 5
+#    #template: "__start__ {trg} __end__ " # # We STRONGLY DISCOURAGE the modification of this line and in fact it shouldn't be included in the config
+#    # unless you really know what you are doing.
 
 seed: 1111
 trainer: /path/to/trainer/run.py

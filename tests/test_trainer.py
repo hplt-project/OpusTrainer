@@ -1,8 +1,6 @@
 #!/usr/bin/env python3
 '''Tests the available functionality'''
 import os
-import random
-import subprocess
 import tempfile
 import unittest
 

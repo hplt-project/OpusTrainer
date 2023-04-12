@@ -242,7 +242,7 @@ class PlaceholderTagModifier(Modifier):
          num_tags: 6
          custom_detok_src: 'zh'
          custom_detok_trg: null
-         template: " __source__ {src} __target__ {trg} __done__"
+         template: "__source__ {src} __target__ {trg} __done__"
          augment: 0.0 # 0% chance to just insert a random string on both sides
          replace: 0.0 # 0% change to use tags to force translate to a random string
         ```
@@ -288,8 +288,8 @@ class PlaceholderTagModifier(Modifier):
     def __call__(self, line:str) -> str:
         """Applies tag to words in a line based on alignment info, and then removes the alignment info from the line.
            This is used to enable terminology support by tagging random words with their translation.
-           eg "I like cake" would become "I like <tag0> gusta </tag0> cake. By default the detokenizer used is the trivial
-           detokenizer, but we can instead have separate detokenizers on src and trg."
+           eg "I like cake" would become "I __source__ like __target__ gusta __done__ cake. 
+           By default the detokenizer used is the trivial detokenizer, but we can instead have separate detokenizers on src and trg."
         """
 
         src, trg, alignment = line.strip().split('\t')

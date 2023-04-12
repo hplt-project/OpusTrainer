@@ -25,6 +25,11 @@ modifiers:
     # and `replace` fraction of chance of adding placeholder tags, but replace the expected target with noise.
     augment: 0
     replace: 0
+ # - Prefix: 0.2 # Prefix must always be used after tags, but ideally never used together with tags
+ #   min_words: 2
+ #   max_words: 5
+    #template: "__start__ {trg} __end__ " # # We STRONGLY DISCOURAGE the modification of this line and in fact it shouldn't be included in the config
+    # unless you really know what you are doing.
 
 seed: 1111
 trainer: cat
