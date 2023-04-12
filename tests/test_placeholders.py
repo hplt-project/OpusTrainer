@@ -12,19 +12,19 @@ class TestTagger(unittest.TestCase):
     random.seed(1)
     tagger = PlaceholderTagModifier(probability=1)
     output = tagger('Hello world\tHallo Welt\t0-0 1-1')
-    self.assertEqual(output, 'Hello <tag4> Hallo </tag4> world <tag1> Welt </tag1>\tHallo Welt')
+    self.assertEqual(output, '__source__ Hello __target__ Hallo __done__ __source__ world __target__ Welt __done__\tHallo Welt')
 
   def test_tagger_augment(self):
     random.seed(1)
     tagger = PlaceholderTagModifier(probability=1, augment=1)
     output = tagger('Hello world\tHallo Welt\t0-0 1-1')
-    self.assertEqual(output, '''Hello ゜ そ world ټ؇ۤە	Hallo ゜ そ Welt ټ؇ۤە''')
+    self.assertEqual(output, '''Hello ټ؇ۤە world ি	Hallo ټ؇ۤە Welt ি''')
 
   def test_tagger_replace(self):
     random.seed(1)
     tagger = PlaceholderTagModifier(probability=.5, replace=1)
     output = tagger('Hello world\tHallo Welt\t0-0 1-1')
-    self.assertEqual(output, '''Hello <tag4> ゜ そ </tag4> world <tag1> ټ؇ۤە </tag1>	゜ そ ټ؇ۤە''')
+    self.assertEqual(output, '''Hello __source__ world __target__ ি __done__	Hallo ি''')
 
   def test_tagger_zh_src(self):
     '''Tests the tagger with zh on the source side'''
@@ -63,7 +63,7 @@ class TestTagger(unittest.TestCase):
     '''Tests the tagger with zh on the source side'''
     random.seed(1)
     tagger = PlaceholderTagModifier(probability=0.6, num_tags=4, custom_detok_src='zh', custom_detok_trg=None,
-          template=" <tag{n}> {token} </tag{n}>", augment=0.4, replace=0.4)
+                                     augment=0.4, replace=0.4)
     with open('contrib/test-data/clean.zhen.10', 'r', encoding='utf-8') as myinput, \
          open('contrib/test-data/clean.zhen.ref.06.4.04.04.src', 'r', encoding='utf-8') as reference:
         for line in myinput:

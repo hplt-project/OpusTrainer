@@ -32,6 +32,7 @@ def get_random_unicode_string(min_length: int=1, max_length: int=4, max_words: i
     # Update this to include code point ranges to be sampled
     # https://jrgraphix.net/r/Unicode/
     # https://en.wikipedia.org/wiki/Unicode_block
+    # Mixing left to righ and right to left bytes causes issues. A lot of them.
     include_ranges = [
         (0x0020, 0x007F), # Basic Latin
         (0x00A0, 0x00FF), # Latin-1 Supplement
@@ -241,7 +242,7 @@ class PlaceholderTagModifier(Modifier):
          num_tags: 6
          custom_detok_src: 'zh'
          custom_detok_trg: null
-         template: " <tag{n}> {token} </tag{n}>"
+         template: " __source__ {src} __target__ {trg} __done__"
          augment: 0.0 # 0% chance to just insert a random string on both sides
          replace: 0.0 # 0% change to use tags to force translate to a random string
         ```
@@ -255,7 +256,7 @@ class PlaceholderTagModifier(Modifier):
 
     def __init__(self, probability: float=0.0, num_tags: int=6,
         custom_detok_src: Optional[str]=None, custom_detok_trg: Optional[str]=None,
-        template: str=" <tag{n}> {token} </tag{n}>", augment: float=0, replace:float=0):
+        template: str="__source__ {src} __target__ {trg} __done__", augment: float=0, replace:float=0):
         super().__init__(probability)
 
         self.num_tags = num_tags
@@ -298,12 +299,6 @@ class PlaceholderTagModifier(Modifier):
         # Get replacement candidates
         candidates: List[Tuple[int, int]] = get_placeholding_candidates(alignment)
 
-        # Get list of possible tags.
-        tags: List[int] = list(range(self.num_tags))
-        # Shuffle the list. It's quite slow, but we only have 6 elements so it should be fine
-        # For more information https://stackoverflow.com/questions/10048069/what-is-the-most-pythonic-way-to-pop-a-random-element-from-a-list
-        random.shuffle(tags)
-
         # Replace each of them with a THRESHOLD probability unless the two words are exactly the same
         # This is to avoid having numbers trained with placeholders or any other words that are exactly the same
         for i in range(len(candidates)):
@@ -318,19 +313,15 @@ class PlaceholderTagModifier(Modifier):
             # Select mode (skip random_weighted_choices*() when 'tag' is the only mode)
             mode = random_weighted_choice(self.modes) if len(self.modes) > 1 else 'tag'
 
-            # If we'd need a tag but we ran out of them, skip.
-            if (mode == "tag" or mode == "replace") and not tags:
-                continue
-
             if mode == "tag":
                 # Hint the expected output to the trainer by specifying it in the input as a tag
-                source[candidates[i][0]] += self.template.format(n=tags.pop(), token=target[candidates[i][1]])
+                source[candidates[i][0]] = self.template.format(src=source[candidates[i][0]], trg=target[candidates[i][1]])
             elif mode == "replace":
                 # Same as above, but instead of the expected target word, we replace it on both
                 # sides with a random string. This encourages the model to really ignore the source
                 # and produce the target that we desire.
                 augment = get_random_unicode_string()
-                source[candidates[i][0]] += self.template.format(n=tags.pop(), token=augment)
+                source[candidates[i][0]] = self.template.format(src=source[candidates[i][0]], trg=augment)
                 target[candidates[i][1]] = augment
             elif mode == "augment":
                 # Augment mode adds random noise both on the source and the target without any

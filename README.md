@@ -57,7 +57,7 @@ modifiers:
   #  num_tags: 6
   #  custom_detok_src: null # Null value for the src detokenizer
   #  custom_detok_trg: zh
-  #  # template: " <tag{n}> {token} </tag{n}>" # This is the default way of inserting tags. Beware of changing it.
+  #  # template: "__source__ {src} __target__ {trg} __done__" # This is the default way of inserting tags. Beware of changing it.
                                                # DO NOT include it in the config as it's a default parameter.
 # - Typos: 0.05 # Consider 5% of the input sentences to contain plausible typos.
 #               # You can specify which modifiers to apply, or just apply each
