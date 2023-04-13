@@ -18,3 +18,10 @@ class TestEndToEnd(unittest.TestCase):
 		with open('contrib/test-data/test_zhen_config.expected.out', 'r', encoding='utf-8') as reffile:
 			reference: str = "".join(reffile.readlines())
 		self.assertEqual(output, reference)
+
+	def test_prefix_augment(self):
+		output: str = subprocess.check_output([sys.executable, '-m', 'opustrainer', '-c', 'contrib/test_zhen_prefix_config.yml', '-d', '--sync'], encoding="utf-8")
+		reference: str = ""
+		with open('contrib/test-data/test_zhen_config_prefix.expected.out', 'r', encoding='utf-8') as reffile:
+			reference: str = "".join(reffile.readlines())
+		self.assertEqual(output, reference)

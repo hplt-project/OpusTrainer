@@ -22,6 +22,7 @@ from functools import partial
 import yaml
 
 from opustrainer.modifiers import Modifier
+from opustrainer.modifiers.prefix import PrefixModifier
 from opustrainer.modifiers.surface import UpperCaseModifier, TitleCaseModifier
 from opustrainer.modifiers.placeholders import PlaceholderTagModifier
 from opustrainer.modifiers.typos import TypoModifier
@@ -45,6 +46,7 @@ MODIFIERS = {
     'TitleCase': TitleCaseModifier,
     'Tags': PlaceholderTagModifier,
     'Typos': TypoModifier,
+    'Prefix': PrefixModifier
 }
 
 @dataclass(frozen=True)
