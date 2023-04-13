@@ -2,6 +2,7 @@ import random
 from typing import List
 from opustrainer.modifiers import Modifier
 
+
 class PrefixModifier(Modifier):
     """Prefixes the source sentence with a phrase from the target sentence. 
     Note that if the target is ZH, JA or basically any other language that is not space segmented,
@@ -30,16 +31,15 @@ class PrefixModifier(Modifier):
 
     def __call__(self, line:str) -> str:
         """Takes a line in the form of "I like pie. Me gustan los pasteles."
-           and turns it into: "__start__ los pasteles __end__ I like pie. Me gustan los pasteles."
-           """
+           and turns it into: "__start__ los pasteles __end__ I like pie. Me
+           gustan los pasteles."
+        """
         if self.probability < random.random():
             return line
+        
         # Take care of cases where we could have the alignment info at the end.
-        splits: List[str] = line.strip().split('\t')
-        src: str = splits[0]
-        trg: str = splits[1]
-
-        target_tok: List[str] = trg.split()
+        fields: List[str] = line.split('\t')
+        target_tok: List[str] = fields[1].split()
 
         # determine the length of the sample
         num_tokens = random.randint(self.min_words, self.max_words)
@@ -58,4 +58,3 @@ class PrefixModifier(Modifier):
 
         # Return the modified string
         return self.template.format(trg=augment_substring) + line
-        
