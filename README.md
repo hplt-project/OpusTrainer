@@ -54,7 +54,6 @@ modifiers:
 - UpperCase: 0.05 # Apply uppercase randomly to 0.05% of sentences. Set to 0 to disable, or remove line entirely.
 - TitleCase: 0.05 # Apply titlecase randomly to 0.05% of sentences.
 #- Tags: 0.08 # Requires dataset augmented with alignment info, appended to the
-  #  num_tags: 6
   #  custom_detok_src: null # Null value for the src detokenizer
   #  custom_detok_trg: zh
   #  # template: "__source__ {src} __target__ {trg} __done__" # This is the default way of inserting tags. Beware of changing it.
@@ -170,7 +169,7 @@ trg=$2
 prefix="--model_prefix=model.${src}-${trg}"
 
 # Placeholders array
-placeholders="--user_defined_symbols=<tag0>,</tag0>,<tag1>,</tag1>,<tag2>,</tag2>,<tag3>,</tag3>,<tag4>,</tag4>,<tag5>,</tag5>"
+placeholders="--user_defined_symbols=__source__,__target__,__done__,__start__,__end__"
 
 # Character coverage. CJK is recommended to have 0.9995, vocab languages proabbly you want 1.
 char_cov="--character_coverage=${char_cov}"

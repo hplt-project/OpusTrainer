@@ -239,7 +239,6 @@ class PlaceholderTagModifier(Modifier):
        ```yaml
        modifiers:
        - Tags: 0.02
-         num_tags: 6
          custom_detok_src: 'zh'
          custom_detok_trg: null
          template: "__source__ {src} __target__ {trg} __done__"
@@ -248,18 +247,15 @@ class PlaceholderTagModifier(Modifier):
         ```
     """
 
-    num_tags: int
     template: str
     src_detokenizer: Detokenizer
     trg_detokenizer: Detokenizer
     modes: List[Tuple[str,float]]
 
-    def __init__(self, probability: float=0.0, num_tags: int=6,
-        custom_detok_src: Optional[str]=None, custom_detok_trg: Optional[str]=None,
+    def __init__(self, probability: float=0.0, custom_detok_src: Optional[str]=None, custom_detok_trg: Optional[str]=None,
         template: str="__source__ {src} __target__ {trg} __done__", augment: float=0, replace:float=0):
         super().__init__(probability)
 
-        self.num_tags = num_tags
         self.template = template
 
         if custom_detok_src:
