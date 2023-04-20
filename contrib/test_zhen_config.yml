@@ -13,6 +13,7 @@ modifiers:
   # No UpperCase or TitleCase modifier when the source is Chinese as we can't upper or lowercase Chinese
   - Tags: 0.1
     custom_detok_src: zh
+    spm_vocab: contrib/test-data/vocab.zhen.spm
 
 seed: 1111
 trainer: cat

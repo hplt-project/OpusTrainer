@@ -20,7 +20,8 @@ classifiers = [
 dependencies = [
     "PyYAML==6.0",
     "sacremoses==0.0.53",
-    "typo==0.1.5"
+    "typo==0.1.5",
+    "sentencepiece==0.1.98"
 ]
 
 [project.scripts]

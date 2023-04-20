@@ -3,8 +3,10 @@ import unittest
 
 from textwrap import dedent
 
-from opustrainer.modifiers.placeholders import PlaceholderTagModifier
+from opustrainer.modifiers.placeholders import PlaceholderTagModifier, get_full_word
 from opustrainer.trainer import CurriculumLoader
+
+import sentencepiece as spm
 
 
 class TestTagger(unittest.TestCase):
@@ -82,3 +84,47 @@ class TestTagger(unittest.TestCase):
           - Tags: 1.0
           - UpperCase: 1.0
       """))
+
+  def test_spm_word_finder(self):
+    intxt = '▁Sur g ical ▁light ing ▁systems ▁are ▁an ▁integral ▁part ▁of ▁the ▁operating ▁room ▁and ▁are ▁often ▁used ▁to ▁document ▁surgical ▁procedures . ▁We ▁focus ▁on ▁video ▁transmission ▁through ▁support ▁arm ▁light ▁slip ▁ring ▁solutions .'
+
+    outtxt = [('Surgical', [0, 1, 2]),
+            ('Surgical', [0, 1, 2]),
+            ('Surgical', [0, 1, 2]),
+            ('lighting', [3, 4]),
+            ('lighting', [3, 4]),
+            ('systems', [5]),
+            ('are', [6]),
+            ('an', [7]),
+            ('integral', [8]),
+            ('part', [9]),
+            ('of', [10]),
+            ('the', [11]),
+            ('operating', [12]),
+            ('room', [13]),
+            ('and', [14]),
+            ('are', [15]),
+            ('often', [16]),
+            ('used', [17]),
+            ('to', [18]),
+            ('document', [19]),
+            ('surgical', [20]),
+            ('procedures.', [21, 22]),
+            ('procedures.', [21, 22]),
+            ('We', [23]),
+            ('focus', [24]),
+            ('on', [25]),
+            ('video', [26]),
+            ('transmission', [27]),
+            ('through', [28]),
+            ('support', [29]),
+            ('arm', [30]),
+            ('light', [31]),
+            ('slip', [32]),
+            ('ring', [33]),
+            ('solutions.', [34, 35]),
+            ('solutions.', [34, 35])]
+    intok = intxt.split()
+    spmmodel = spm.SentencePieceProcessor(model_file='contrib/test-data/vocab.zhen.spm')
+    for i in range(len(intok)):
+        self.assertEqual(outtxt[i], get_full_word(intok, i, spmmodel))

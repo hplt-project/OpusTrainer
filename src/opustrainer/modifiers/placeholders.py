@@ -4,6 +4,7 @@ from typing import Set, List, Tuple, Optional, Protocol, TypeVar, Iterable
 from warnings import warn
 
 from sacremoses import MosesDetokenizer
+import sentencepiece as spm
 
 from opustrainer.modifiers import Modifier
 
@@ -220,6 +221,37 @@ def get_placeholding_candidates(align_line: str) -> List[Tuple[int, int]]:
     return list(src_trg_set & trg_src_filtered_rereversed_set)
 
 
+def get_full_word(tokens: List[str], token_id: int, spmmodel: spm.SentencePieceProcessor) -> Tuple[str, List[int]]:
+    """Gets the full word given an index"""
+    CONTROL_TOKEN='▁'
+    myword = tokens[token_id]
+
+    rebuild_words: List[str] = [myword]
+    rebuild_words_ids: List[int] = [token_id]
+
+    # Check if it's start word
+    if myword[0] != CONTROL_TOKEN:
+        # We are not at the start word, so we need
+        # to go back in time to find the full word
+        for i in range(token_id - 1, -1, -1):
+            cur_word = tokens[i]
+            rebuild_words = [cur_word] + rebuild_words
+            rebuild_words_ids = [i] + rebuild_words_ids
+            if cur_word[0] == CONTROL_TOKEN:
+                break;
+
+    # Check if it's perhaps a start of an spm token'
+    if token_id < len(tokens) - 1: # Check if it's not the last word'
+        for i in range(token_id + 1, len(tokens)):
+            cur_word = tokens[i]
+            if cur_word[0] != CONTROL_TOKEN:
+                rebuild_words.append(cur_word)
+                rebuild_words_ids.append(i)
+            else:
+                break
+    return (spmmodel.decode_pieces(rebuild_words), rebuild_words_ids)
+
+
 class Detokenizer(Protocol):
     def detokenize(self, tokens:List[str]) -> str:
         ...
@@ -242,6 +274,7 @@ class PlaceholderTagModifier(Modifier):
          custom_detok_src: 'zh'
          custom_detok_trg: null
          template: "__source__ {src} __target__ {trg} __done__"
+         spm_vocab: /path/to/model.spm
          augment: 0.0 # 0% chance to just insert a random string on both sides
          replace: 0.0 # 0% change to use tags to force translate to a random string
         ```
@@ -251,9 +284,11 @@ class PlaceholderTagModifier(Modifier):
     src_detokenizer: Detokenizer
     trg_detokenizer: Detokenizer
     modes: List[Tuple[str,float]]
+    spm_model: None | spm.SentencePieceProcessor
 
     def __init__(self, probability: float=0.0, custom_detok_src: Optional[str]=None, custom_detok_trg: Optional[str]=None,
-        template: str="__source__ {src} __target__ {trg} __done__", augment: float=0, replace:float=0):
+        template: str="__source__ {src} __target__ {trg} __done__", augment: float=0, replace:float=0,
+        spm_vocab: Optional[str]=None):
         super().__init__(probability)
 
         self.template = template
@@ -280,6 +315,9 @@ class PlaceholderTagModifier(Modifier):
             self.modes.append(('replace', replace))
 
         self.modes.append(('tag', 1.0)) # Weight doesn't matter as long as cumsum => 1.0, it's last on the list anyway
+
+        if spm_vocab is not None:
+            self.spm_model = spm.SentencePieceProcessor(model_file=spm_vocab)
 
     def __call__(self, line:str) -> str:
         """Applies tag to words in a line based on alignment info, and then removes the alignment info from the line.
