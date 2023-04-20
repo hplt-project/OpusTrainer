@@ -1,3 +1,4 @@
+from ctypes import alignment
 import random
 from operator import itemgetter
 from typing import Set, List, Tuple, Optional, Protocol, TypeVar, Iterable
@@ -251,6 +252,11 @@ def get_full_word(tokens: List[str], token_id: int, spmmodel: spm.SentencePieceP
                 break
     return (spmmodel.decode_pieces(rebuild_words), rebuild_words_ids)
 
+def fix_alignments(align_line: str, src_word_range: List[int], trg_word_range: List[int]) -> str:
+    """Fixes up alignments given the new information,
+    Assumes insertion is of the type X src Y trg Z and X, Y and Z are in the vocab"""
+    src_trg_align: List[Tuple[int, int]] = [tuplify(i) for i in align_line.split()]
+    return align_line
 
 class Detokenizer(Protocol):
     def detokenize(self, tokens:List[str]) -> str:
@@ -284,7 +290,7 @@ class PlaceholderTagModifier(Modifier):
     src_detokenizer: Detokenizer
     trg_detokenizer: Detokenizer
     modes: List[Tuple[str,float]]
-    spm_model: None | spm.SentencePieceProcessor
+    spm_model: Optional[spm.SentencePieceProcessor]
 
     def __init__(self, probability: float=0.0, custom_detok_src: Optional[str]=None, custom_detok_trg: Optional[str]=None,
         template: str="__source__ {src} __target__ {trg} __done__", augment: float=0, replace:float=0,
@@ -319,11 +325,10 @@ class PlaceholderTagModifier(Modifier):
         if spm_vocab is not None:
             self.spm_model = spm.SentencePieceProcessor(model_file=spm_vocab)
 
-    def __call__(self, line:str) -> str:
-        """Applies tag to words in a line based on alignment info, and then removes the alignment info from the line.
-           This is used to enable terminology support by tagging random words with their translation.
-           eg "I like cake" would become "I __source__ like __target__ gusta __done__ cake. 
-           By default the detokenizer used is the trivial detokenizer, but we can instead have separate detokenizers on src and trg."
+
+    def call_with_spm(self, line: str) -> str:
+        """Applies tags to words based on SPM input, de-SPMs the input and then KEEPS the alignment info.
+           Designed for training student models.
         """
 
         src, trg, alignment = line.strip().split('\t')
@@ -336,7 +341,90 @@ class PlaceholderTagModifier(Modifier):
         # Replace each of them with a THRESHOLD probability unless the two words are exactly the same
         # This is to avoid having numbers trained with placeholders or any other words that are exactly the same
         for i in range(len(candidates)):
-            # Skip words that are the same on 
+            # Skip words that are the same on both the source and the target
+            if source[candidates[i][0]] == target[candidates[i][1]]:
+                continue
+
+            # Skip words whose turn it isn't yet.
+            if random.random() >= self.probability:
+                continue
+
+            src_word_idx = candidates[i][0]
+            trg_word_idx = candidates[i][1]
+            full_word_src, tok_range_src = get_full_word(source, src_word_idx, self.spm_model)
+            full_word_trg, tok_range_trg = get_full_word(target, trg_word_idx, self.spm_model)
+
+            # Several problems from here on:
+            # Need to fix up the alignments (not too difficult)
+            # Need to fix up the candidates, since the indices are all off in case of extra tagging
+            # in this sentence.
+            # In principal this should be extremely rare so we disregard it for now @TODO Nick
+            # by breaking out of the loop.
+
+            # Now, change the index in the source to the last word in the token range in case
+            # there are more than one tokens
+            candidates[i] = (tok_range_src[0], tok_range_trg[-1])
+
+            # Select mode (skip random_weighted_choices*() when 'tag' is the only mode)
+            mode = random_weighted_choice(self.modes) if len(self.modes) > 1 else 'tag'
+
+            if mode == "tag":
+                # Hint the expected output to the trainer by specifying it in the input as a tag
+
+                # We don't want to insert in the middle of a source word that is multiple SPM tokens
+                # So we instead delete the tokens that are after the first one and then we insert the whole
+                # de-spm'd word. Later on full spm decode will be done so it doesn't matter
+                for j in tok_range_src[1:]:
+                    del(source[j])
+
+                source[candidates[i][0]] = self.template.format(src=full_word_src, trg=full_word_trg])
+
+                # Fix alignments. Assume template is of the for X src Y trg Z and X, Y and Z are vocabulary items
+
+            elif mode == "replace":
+                raise NotImplementedError("Mode replace not implemented for subwords yet.")
+                # Same as above, but instead of the expected target word, we replace it on both
+                # sides with a random string. This encourages the model to really ignore the source
+                # and produce the target that we desire.
+                augment = get_random_unicode_string()
+                source[candidates[i][0]] = self.template.format(src=source[candidates[i][0]], trg=augment)
+                target[candidates[i][1]] = augment
+            elif mode == "augment":
+                raise NotImplementedError("Mode augment not implemented for subwords yet.")
+                # Augment mode adds random noise both on the source and the target without any
+                # tagging encouraging the model to copy crap from one side to the other.
+                augment = get_random_unicode_string()
+                source[candidates[i][0]] = source[candidates[i][0]] + " " + augment
+                target[candidates[i][1]] = target[candidates[i][1]] + " " + augment
+
+        source_detok = self.src_detokenizer.detokenize(source)
+        target_detok = self.trg_detokenizer.detokenize(target)
+
+        # Return the sentence, source tagged a la Dinu et al, target as it is and no alignment info
+        return  source_detok + "\t" + target_detok
+
+    def __call__(self, line:str) -> str:
+        """Applies tag to words in a line based on alignment info, and then removes the alignment info from the line.
+           This is used to enable terminology support by tagging random words with their translation.
+           eg "I like cake" would become "I __source__ like __target__ gusta __done__ cake. 
+           By default the detokenizer used is the trivial detokenizer, but we can instead have separate detokenizers on src and trg."
+        """
+
+        # If training student model, we do things differently
+        if self.spm_model is not None:
+            return self.call_with_spm(line)
+
+        src, trg, alignment = line.strip().split('\t')
+        source = src.split(' ')
+        target = trg.split(' ')
+
+        # Get replacement candidates
+        candidates: List[Tuple[int, int]] = get_placeholding_candidates(alignment)
+
+        # Replace each of them with a THRESHOLD probability unless the two words are exactly the same
+        # This is to avoid having numbers trained with placeholders or any other words that are exactly the same
+        for i in range(len(candidates)):
+            # Skip words that are the same on both the source and the target
             if source[candidates[i][0]] == target[candidates[i][1]]:
                 continue
 
