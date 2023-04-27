@@ -3,6 +3,8 @@ import random
 from operator import itemgetter
 from typing import Set, List, Tuple, Optional, Protocol, TypeVar, Iterable
 from warnings import warn
+from itertools import zip_longest
+from copy import deepcopy
 
 from sacremoses import MosesDetokenizer
 import sentencepiece as spm
@@ -252,11 +254,64 @@ def get_full_word(tokens: List[str], token_id: int, spmmodel: spm.SentencePieceP
                 break
     return (spmmodel.decode_pieces(rebuild_words), rebuild_words_ids)
 
+def custom_zip(a: List[int], b: List[int]) -> Iterable[Tuple[int, int]]:
+    """Zip_longest with the filler being the last token of of the shortest list
+    suitable for generating alignments of uneven words."""
+    if len(a) > len(b):
+        filler = b[-1]
+    else:
+        filler = a[-1]
+    return zip_longest(a,b,fillvalue=filler)
+
+def gen_tag_alignment(src_word_range: List[int], trg_word_range: List[int]) -> List[str]:
+    """Generates an alignment specifically for the tagged subword.
+    Takes alignment information from A -> B to X A Y B Z -> B"""
+    ret_alignment_list: List[str] = []
+
+    # Increment all the source words by 1 as the first source token is not counted
+    # due to it being the tag token
+    src_actual = [x + 1 for x in src_word_range]
+    src_trg_alignment = list(custom_zip(src_actual, trg_word_range))
+
+    # Now produce trg-trg. It's the same number of words as the trg tokens
+    # starting from the last src bit of the src_trg_alignment + 2 (since we skip the Y tag token)
+    starting_point = src_trg_alignment[-1][0] + 2
+    trg_trg_alignment = []
+    for i in range(len(trg_word_range)):
+        trg_trg_alignment.append((starting_point + i, trg_word_range[i]))
+
+    # now merge the two lists and produce an alignment format.
+    full_list = src_trg_alignment + trg_trg_alignment
+    return [str(a) + '-' + str(b) for a,b in full_list]
+
+
 def fix_alignments(align_line: str, src_word_range: List[int], trg_word_range: List[int]) -> str:
     """Fixes up alignments given the new information,
-    Assumes insertion is of the type X src Y trg Z and X, Y and Z are in the vocab"""
+    Assumes insertion is of the type X src Y trg Z and X, Y and Z are in the vocab.
+    X, Y and Z need to not be aligned.
+    Essentially, every number on the source side needs to be pushed by one.
+    Example:
+    a b c d c d ||| e f d f g h ||| 0-0 1-1 2-2 3-3 4-4 5-5
+    a XXX bcd YYY fdf ZZZ c d ||| e f d f g h  ||| 0-0 XXX 2-2 3-3 4-4 YYY 6-2 7-3 8-4 ZZZ 10-5 11-6
+    X, Y and Z obv do not appear on the target side. bcd and fdf are subword word units
+    """
     src_trg_align: List[Tuple[int, int]] = [tuplify(i) for i in align_line.split()]
-    return align_line
+
+    # The offset is the length of the two lists + 3 (because of the 3 tags)
+    offset = len(src_word_range) + len(trg_word_range) + 3
+
+    ret_align_list: List[str] = []
+    for src, trg in src_trg_align:
+        if src < src_word_range[0]:
+            ret_align_list.append(str(src)+'-'+str(trg))
+        elif src == src_word_range[0]:
+            # We insert all the new elements here
+            # first, we skip one token as X is unaligned and appears before the first subword unit
+            ret_align_list.extend(gen_tag_alignment(src_word_range, trg_word_range))
+        else:
+            ret_align_list.append(str(src+offset)+'-'+str(trg))
+
+    return " ".join(ret_align_list)
 
 class Detokenizer(Protocol):
     def detokenize(self, tokens:List[str]) -> str:
@@ -291,10 +346,11 @@ class PlaceholderTagModifier(Modifier):
     trg_detokenizer: Detokenizer
     modes: List[Tuple[str,float]]
     spm_model: Optional[spm.SentencePieceProcessor]
+    spm_run: bool
 
     def __init__(self, probability: float=0.0, custom_detok_src: Optional[str]=None, custom_detok_trg: Optional[str]=None,
         template: str="__source__ {src} __target__ {trg} __done__", augment: float=0, replace:float=0,
-        spm_vocab: Optional[str]=None):
+        spm_vocab: Optional[str]=None, spm_run: bool=False):
         super().__init__(probability)
 
         self.template = template
@@ -324,6 +380,7 @@ class PlaceholderTagModifier(Modifier):
 
         if spm_vocab is not None:
             self.spm_model = spm.SentencePieceProcessor(model_file=spm_vocab)
+        self.spm_run = spm_run
 
 
     def call_with_spm(self, line: str) -> str:
@@ -334,7 +391,6 @@ class PlaceholderTagModifier(Modifier):
         src, trg, alignment = line.strip().split('\t')
         source = src.split(' ')
         target = trg.split(' ')
-
         # Get replacement candidates
         candidates: List[Tuple[int, int]] = get_placeholding_candidates(alignment)
 
@@ -377,9 +433,12 @@ class PlaceholderTagModifier(Modifier):
                 for j in tok_range_src[1:]:
                     del(source[j])
 
-                source[candidates[i][0]] = self.template.format(src=full_word_src, trg=full_word_trg])
+                source[candidates[i][0]] = self.template.format(src=full_word_src, trg=full_word_trg)
 
                 # Fix alignments. Assume template is of the for X src Y trg Z and X, Y and Z are vocabulary items
+                alignment = fix_alignments(deepcopy(alignment), tok_range_src, tok_range_trg)
+                break # For testing purposes let's see that we only have one for now
+
 
             elif mode == "replace":
                 raise NotImplementedError("Mode replace not implemented for subwords yet.")
@@ -401,7 +460,7 @@ class PlaceholderTagModifier(Modifier):
         target_detok = self.trg_detokenizer.detokenize(target)
 
         # Return the sentence, source tagged a la Dinu et al, target as it is and no alignment info
-        return  source_detok + "\t" + target_detok
+        return  source_detok + "\t" + target_detok + "\t" + alignment
 
     def __call__(self, line:str) -> str:
         """Applies tag to words in a line based on alignment info, and then removes the alignment info from the line.
@@ -411,7 +470,7 @@ class PlaceholderTagModifier(Modifier):
         """
 
         # If training student model, we do things differently
-        if self.spm_model is not None:
+        if self.spm_run:
             return self.call_with_spm(line)
 
         src, trg, alignment = line.strip().split('\t')
