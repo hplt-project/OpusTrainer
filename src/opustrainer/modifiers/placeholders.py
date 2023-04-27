@@ -266,10 +266,10 @@ def custom_zip(a: List[int], b: List[int]) -> Iterable[Tuple[int, int]]:
 def gen_tag_alignment(src_word_range: List[int], trg_word_range: List[int]) -> List[str]:
     """Generates an alignment specifically for the tagged subword.
     Takes alignment information from A -> B to X A Y B Z -> B"""
-    ret_alignment_list: List[str] = []
 
     # Increment all the source words by 1 as the first source token is not counted
-    # due to it being the tag token
+    # due to it being the tag token and it has taken the position of the the first
+    # part of the subword
     src_actual = [x + 1 for x in src_word_range]
     src_trg_alignment = list(custom_zip(src_actual, trg_word_range))
 
@@ -297,8 +297,9 @@ def fix_alignments(align_line: str, src_word_range: List[int], trg_word_range: L
     """
     src_trg_align: List[Tuple[int, int]] = [tuplify(i) for i in align_line.split()]
 
-    # The offset is the length of the two lists + 3 (because of the 3 tags)
-    offset = len(src_word_range) + len(trg_word_range) + 3
+    # The offset is the length of the two lists + 2 (because of the 3 tags, but the first one is already
+    # accounted for
+    offset = len(src_word_range) + len(trg_word_range) + 2
 
     ret_align_list: List[str] = []
     for src, trg in src_trg_align:

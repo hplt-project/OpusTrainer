@@ -129,10 +129,23 @@ class TestTagger(unittest.TestCase):
     for i in range(len(intok)):
         self.assertEqual(outtxt[i], get_full_word(intok, i, spmmodel))
 
+  def printAlignments(self, myinput: str) -> None:
+    """Prints the alignments one by one"""
+    src, trg, align = myinput.split('\t')
+    src = src.split()
+    trg = trg.split()
+    for align_point in align.split():
+      srcid, trgid = align_point.split('-')
+      print(srcid, src[int(srcid)], ' --- ', trg[int(trgid)])
+
   def test_tagger_zh_src_spm(self):
     '''Tests the tagger with zh on the target side'''
     random.seed(2)
-    tagger = PlaceholderTagModifier(probability=0.6, custom_detok_src='zh', spm_vocab='contrib/test-data/vocab.zhen.spm', spm_run=True)
+    tagger = PlaceholderTagModifier(probability=0.6, spm_vocab='contrib/test-data/vocab.zhen.spm', spm_run=True)
     line = """▁手术 ▁照明 ▁系统 ▁是 ▁手术 室 ▁的 ▁组成 ▁部分 ▁, ▁同时 ▁还 ▁常 ▁用来 ▁记录 ▁手术 ▁过程 ▁。 ▁我们 ▁专注 于 ▁通过 ▁支 <0xE6> <0x92> <0x91> ▁ <0xE8> <0x87> <0x82> ▁灯 ▁滑 环 ▁解决 ▁方案 ▁来 ▁传输 ▁视频\t▁Sur g ical ▁light ing ▁systems ▁are ▁an ▁integral ▁part ▁of ▁the ▁operating ▁room ▁and ▁are ▁often ▁used ▁to ▁document ▁surgical ▁procedures . ▁We ▁focus ▁on ▁video ▁transmission ▁through ▁support ▁arm ▁light ▁slip ▁ring ▁solutions .\t0-0 1-3 1-4 2-5 3-6 4-2 5-13 6-10 7-7 7-8 7-10 8-9 10-11 12-16 13-17 13-18 14-19 15-20 17-22 18-23 19-24 19-25 20-24 21-28 22-29 27-30 28-30 29-30 30-31 31-32 32-33 33-34 34-34 35-28 35-35 36-27 37-26"""
-    print(tagger(line))
+    tagged = tagger(line)
+    print(tagged)
+    self.printAlignments(line)
+    print('---------------------')
+    self.printAlignments(tagged)
     self.assertEqual(line, line)
