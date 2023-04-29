@@ -388,8 +388,11 @@ class PlaceholderTagModifier(Modifier):
         """Applies tags to words based on SPM input, de-SPMs the input and then KEEPS the alignment info.
            Designed for training student models.
         """
-
-        src, trg, alignment = line.strip().split('\t')
+        # Sometimes we get malformed data despite our best efforts
+        try:
+            src, trg, alignment = line.strip().split('\t')
+        except:
+            return "DELETEME\tDELETEME" + line.replace('\t', ' ')
         source = src.split(' ')
         target = trg.split(' ')
         # Get replacement candidates
@@ -431,7 +434,10 @@ class PlaceholderTagModifier(Modifier):
                 # We don't want to insert in the middle of a source word that is multiple SPM tokens
                 # So we instead delete the tokens that are after the first one and then we insert the whole
                 # de-spm'd word. Later on full spm decode will be done so it doesn't matter
-                for j in tok_range_src[1:]:
+                # List elements should be deleted right to left
+                todelete = tok_range_src[1:]
+                todelete.reverse()
+                for j in todelete:
                     del(source[j])
 
                 source[candidates[i][0]] = self.template.format(src=full_word_src, trg=full_word_trg)

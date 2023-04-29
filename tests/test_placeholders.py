@@ -149,3 +149,17 @@ class TestTagger(unittest.TestCase):
     print('---------------------')
     self.printAlignments(tagged)
     self.assertEqual(line, line)
+    print('-------------done-----------------')
+
+
+  def test_tagger_zh_src_spm_broken(self):
+    '''Tests the tagger with zh on the target side'''
+    random.seed(2)
+    tagger = PlaceholderTagModifier(probability=0, spm_vocab='contrib/test-data/vocab.zhen.spm', spm_run=True)
+    line = """▁14 ▁. ▁委员会 ▁注意 ▁到 ▁, ▁气候 ▁变化 ▁的 ▁不利 ▁影响 ▁威胁 ▁到 ▁整个 ▁世界 ▁, ▁其 ▁表现 ▁形式 ▁多种 多样 ▁, ▁例如 ▁全球 ▁平均 ▁气温 ▁升高 ▁、 ▁海平 面 ▁上升 ▁、 ▁极 地 ▁冰 <0xE5> <0xB8> <0xBD> ▁的 ▁ 碎 裂 ▁和 ▁ 融 化 ▁。\t▁The ▁Committee ▁noted ▁that ▁the ▁adverse ▁effects ▁of ▁climate ▁change ▁threatened ▁the ▁entire ▁world ▁and ▁were ▁manifested ▁in ▁a ▁variety ▁of ▁ways , ▁such ▁as ▁rising ▁global ▁average ▁temperatures , ▁rising ▁sea ▁levels ▁and ▁the ▁fragmentation ▁and ▁ mel ting ▁of ▁polar ▁ice ▁cap s .\t0-0 1-0 2-1 3-2 3-3 4-2 4-4 5-3 6-8 7-9 8-7 9-5 9-6 10-6 11-10 13-12 14-13 15-14 16-16 17-16 18-16 18-20 19-18 19-19 19-21 20-19 21-22 22-23 22-24 23-26 24-27 25-28 26-28 27-29 28-31 28-32 29-31 30-30 31-29 32-41 33-41 34-42 36-43 37-43 38-40 39-37 40-35 41-35 42-36 43-37 44-38 44-39 45-38 46-45"""
+    tagged = tagger(line)
+    print(tagged)
+    self.printAlignments(line)
+    print('---------------------')
+    self.printAlignments(tagged)
+    self.assertEqual(line, line)
