@@ -321,6 +321,11 @@ class StateLoader:
         }, fh, allow_unicode=True, sort_keys=False) #TODO: is safe_dump not sufficient?
 
 
+class CurriculumLoaderError(ValueError):
+    """Exception raised when the yaml data contains an invalid curriculum"""
+    pass
+
+
 class CurriculumV1Loader:
     def load(self, ymldata:dict, *, basepath:str='./') -> Curriculum:
         datasets = self._load_datasets(ymldata, basepath)
@@ -363,6 +368,16 @@ class CurriculumV1Loader:
           - dataset2 frac
           - until dataset3 epochs
         ```
+        or the more verbose version
+        ```yaml
+        stagename:
+          mix:
+            - dataset1 frac
+            - dataset2 frac
+            - until dataset3 epochs
+          modifiers:
+            - Modifier: freq
+        ```
         """
         return {
             stage_name: self._load_stage(ymldata, stage_name, datasets, int(ymldata['seed']))
@@ -372,19 +387,43 @@ class CurriculumV1Loader:
     def _load_stage(self, ymldata:dict, stage_name:str, available_datasets:Dict[str,Dataset], seed:int) -> Stage:
         datasets: List[Tuple[Dataset, float]] = []
 
-        for line in ymldata[stage_name][:-1]:
-            dataset_name, weight = line.split()
-            datasets.append((available_datasets[dataset_name], float(weight)))
+        if isinstance(ymldata[stage_name], list):
+            mix = ymldata[stage_name]
+        else:
+            mix = ymldata[stage_name].get('mix', [])
 
-        _, until_dataset_name, max_epochs = ymldata[stage_name][-1].split()
-        assert until_dataset_name in available_datasets, f"until clause of stage '{stage_name}' refers to unknown dataset '{until_dataset_name}'"
-        assert until_dataset_name in {dataset.name for dataset, weight in datasets if weight > 0.0}, f"until clause of stage '{stage_name}' watches dataset '{until_dataset_name}' but that dataset is not read during this stage"
-        return Stage(
-            name=stage_name,
-            datasets=datasets,
-            until_dataset=until_dataset_name,
-            until_epoch=int(max_epochs) if max_epochs != 'inf' else None
-        )
+        if len(mix) == 0:
+            raise CurriculumLoaderError(f"the dataset mix of stage '{stage_name}' is empty or missing its until clause")
+        if not mix[-1].startswith('until '):
+            raise CurriculumLoaderError(f"the last entry in {stage_name}'s dataset mix is not the until clause")
+
+        for line in mix[:-1]:
+            dataset_name, weight = line.split()
+            try:
+                datasets.append((available_datasets[dataset_name], float(weight)))
+            except KeyError:
+                raise CurriculumLoaderError(f"stage '{stage_name}' mentions unknown dataset '{dataset_name}'")
+            except ValueError:
+                raise CurriculumLoaderError(f"could not convert the weight '{weight}' of stage '{stage_name}' dataset '{dataset_name}' to float")
+
+        try:
+            _, until_dataset_name, max_epochs = mix[-1].split()
+            until_epoch = int(max_epochs) if max_epochs != 'inf' else None
+        except ValueError:
+            raise CurriculumLoaderError(f"could not parse last line as `until <dataset_name> <number|'inf'>`: {mix[-1]}")
+        if until_dataset_name not in {dataset.name for dataset, weight in datasets if weight > 0.0}:
+            raise CurriculumLoaderError(f"until clause of stage '{stage_name}' watches dataset '{until_dataset_name}' but that dataset is not read during this stage")
+
+        try:
+            return Stage(
+                name=stage_name,
+                datasets=datasets,
+                until_dataset=until_dataset_name,
+                until_epoch=until_epoch,
+                modifiers=self._load_modifiers(ymldata[stage_name]) if isinstance(ymldata[stage_name], dict) and 'modifiers' in ymldata[stage_name] else None
+            )
+        except Exception as exc:
+            raise CurriculumLoaderError(f"could not complete the parse of stage '{stage_name}': {exc!s}") from exc
 
     def _load_modifiers(self, ymldata:dict) -> List[Modifier]:
         """Reads
@@ -408,17 +447,20 @@ class CurriculumV1Loader:
 
         return modifiers
 
-
     def _load_modifier(self, modifier_entry: Dict[str, Any]) -> Modifier:
-        settings: Dict[str, Any] = {}
-        name: str = ""
-        for i, (key, value) in enumerate(modifier_entry.items()):
-            if i == 0:
-                name = key # The probability of the modifier is attached to
-                settings['probability'] = value
-            else:
-                settings[key] = value
-        return MODIFIERS[name](**settings)
+        (name, probability), *config_pairs = modifier_entry.items()
+        settings = {
+            **dict(config_pairs),
+            'probability': float(probability)
+        }
+        try:
+            modifier = MODIFIERS[name]
+        except KeyError:
+            raise CurriculumLoaderError(f"unknown modifier '{name}'")
+        try:
+            return modifier(**settings)
+        except Exception as exc:
+            raise CurriculumLoaderError(f"could not initialize modifier '{name}': {exc!s}") from exc
 
 
 class CurriculumLoader:
@@ -526,9 +568,17 @@ class Trainer:
 
     def next_stage(self) -> Optional[Stage]:
         """Move to the next stage. Will return this next stage or None if there is no next stage."""
+        if self.stage is None:
+            return None
+
         self.stage = self.curriculum.next_stage(self.stage)
+
+        # If there is a next stage, also reset the epoch tracker to track the
+        # `until` clause of that new stage.
+        # TODO: when self.stage is None, should we delete the EpochTracker?
         if self.stage is not None:
             self.epoch_tracker = EpochTracker(self.readers[self.stage.until_dataset])
+
         return self.stage
 
     def run(self, *, batch_size:int=100) -> Iterable[List[str]]:
@@ -545,8 +595,12 @@ class Trainer:
 
                 # Apply any modifiers to random lines in the batch, or sentence
                 # (Multiple modifiers could be applied to the same line!)
-                # TODO: maybe make this self.stage.modifiers? Would that make sense?
-                for modifier in self.curriculum.modifiers:
+                if self.stage.modifiers is not None:
+                    modifiers = self.stage.modifiers
+                else:
+                    modifiers = self.curriculum.modifiers
+
+                for modifier in modifiers:
                     batch = [modifier(line.rstrip('\n')) + '\n' for line in batch]
 
                 random.shuffle(batch)

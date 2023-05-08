@@ -86,6 +86,25 @@ seed: 1111
 trainer: /path/to/trainer/run.py
 ```
 
+### Extended stage configuration
+If you want to change which modifiers are used for a specific stage, you can the extended stage configuration format. If a `modifiers` is mentioned here, it will override the curriculum-wide defined `modifiers` for just this stage.
+
+In the extended format, the list of datasets is defined in the `mix` key. You can optionally add a `modifiers` key. For example: 
+
+```yaml
+start:
+  mix:
+  - clean 0.8
+  - medium 0.2
+  - dirty 0
+  - until clean 2 # Until two epochs of clean
+  modifiers:
+    - UpperCase: 0.05
+    - TitleCase: 0.05
+```
+
+Note that you can use YAML references if you wish to extensively combine global and local modifiers.
+
 ## Usage
 ```bash
 % ./trainer.py --help

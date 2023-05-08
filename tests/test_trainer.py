@@ -8,7 +8,7 @@ from typing import IO, Type
 from collections import Counter
 from contextlib import closing
 
-from opustrainer.trainer import Dataset, DatasetReader, AsyncDatasetReader, CurriculumLoader, Trainer, StateTracker
+from opustrainer.trainer import Curriculum, CurriculumLoaderError, Dataset, DatasetReader, AsyncDatasetReader, CurriculumLoader, Trainer, StateTracker, Stage
 
 TEST_FILE: str
 
@@ -174,3 +174,122 @@ class TestTrainer(unittest.TestCase):
 				batches.extend(state_tracker.run(trainer2))
 			
 		self.assertEqual(batches, batches_ref)
+
+
+class TestCurriculumLoader(unittest.TestCase):
+	def test_simple(self):
+		"""Test loading of a minimal configuration"""
+		config = {
+			'datasets': {
+				'clean': 'contrib/test-data/clean',
+			},
+			'stages': [
+				'start'
+			],
+			'start': [
+				'clean 1.0',
+				'until clean 5'
+			],
+			'seed': 1111,
+			'modifiers': [
+				{'UpperCase': 1.0}
+			]
+		}
+		curriculum = CurriculumLoader().load(config)
+		self.assertIsInstance(curriculum, Curriculum)
+		self.assertEqual(curriculum.datasets, {
+			'clean': Dataset(name='clean', files=['./contrib/test-data/clean'])
+		})
+		self.assertEqual(curriculum.stages, {
+			'start': Stage(
+				name='start',
+				datasets=[
+					(Dataset('clean', ['./contrib/test-data/clean']), 1.0)
+				],
+				until_dataset='clean',
+				until_epoch=5,
+				modifiers=None)
+		})
+		self.assertEqual(curriculum.seed, 1111)
+		self.assertEqual(len(curriculum.modifiers), 1)
+
+	def test_no_until(self):
+		"""Test that omitting the until clause raises an error"""
+		config = {
+			'datasets': {
+				'clean': 'contrib/test-data/clean',
+			},
+			'stages': [
+				'start'
+			],
+			'start': [
+				'clean 1.0'
+			],
+			'seed': 1
+		}
+		with self.assertRaisesRegex(CurriculumLoaderError, 'until clause'):
+			CurriculumLoader().load(config)
+	
+	def test_undefined_dataset(self):
+		"""Test that mentioning a wrong dataset raises an error"""
+		config = {
+			'datasets': {
+				'clean': 'contrib/test-data/clean',
+			},
+			'stages': [
+				'start'
+			],
+			'start': [
+				'cleany 1.0',
+				'until cleany 1'
+			],
+			'seed': 1
+		}
+		with self.assertRaisesRegex(CurriculumLoaderError, 'unknown dataset'):
+			CurriculumLoader().load(config)
+
+	def test_undefined_modifier(self):
+		"""Test that mentioning an unknown modifier raises an error"""
+		config = {
+			'datasets': {
+				'clean': 'contrib/test-data/clean',
+			},
+			'stages': [
+				'start'
+			],
+			'start': [
+				'clean 1.0',
+				'until clean 1'
+			],
+			'modifiers': [
+				{'NonExistingModifier': 1.0}
+			],
+			'seed': 1
+		}
+		with self.assertRaisesRegex(CurriculumLoaderError, 'unknown modifier'):
+			CurriculumLoader().load(config)
+
+	def test_extended_stage_configuration(self):
+		"""Test the extended stage configuration"""
+		config = {
+			'datasets': {
+				'clean': 'contrib/test-data/clean',
+			},
+			'stages': [
+				'start'
+			],
+			'start': {
+				'mix': [
+					'clean 1.0',
+					'until clean 1'
+				],
+				'modifiers': [
+					{'UpperCase': 1.0}
+				],
+			},
+			'seed': 1
+		}
+		curriculum = CurriculumLoader().load(config)
+		self.assertEqual(len(curriculum.stages['start'].datasets), 1)
+		self.assertEqual(curriculum.stages['start'].until_dataset, 'clean')
+		self.assertTrue(curriculum.stages['start'].modifiers is not None and len(curriculum.stages['start'].modifiers) == 1)
