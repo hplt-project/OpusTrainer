@@ -68,6 +68,7 @@ class Stage:
     datasets: List[Tuple[Dataset, float]]
     until_dataset: str
     until_epoch: Optional[int]
+    modifiers: Optional[List[Modifier]]
 
 
 @dataclass(frozen=True)
