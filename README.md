@@ -18,6 +18,33 @@ cd opustrainer
 pip install -e .
 ```
 
+## Usage
+```bash
+% ./trainer.py --help
+usage: trainer.py [-h] --config CONFIG [--temporary-directory TEMPORARY_DIR] [--state STATE_FILE] [--do-not-resume] [--sync] [trainer-command [arguments]]
+
+Feeds marian tsv data for training.
+
+options:
+  -h, --help            show this help message and exit
+  --config CONFIG, -c CONFIG
+                        YML configuration input.
+  --temporary-directory TEMPORARY_DIR, -t TEMPORARY_DIR
+                        Temporary dir, used for shuffling and tracking state
+  --state STATE_FILE    Path to trainer state file which stores how much of
+                        each dataset has been read. Defaults to ${CONFIG}.state
+  --sync                Do not shuffle in the background
+  --do-not-resume, -d   Do not resume from the previous training state
+```
+Once you fix the paths in the configuration file, `train_config.yml` you can run a test case by doing:
+```bash
+./trainer.py -c train_config.yml /path/to/marian -c marian_config --any --other --flags
+```
+You can check resulting mixed file in `/tmp/test`. If your neural network trainer doesn't support training from `stdin`, you can use this tool to generate a training dataset and then disable data reordering or shuffling at your trainer implementation, as your training input should be balanced.
+
+At the start of the training all datasets are shuffled. Each time a dataset's end is reached, it is re-shuffled. Shuffling [in the system temp directory](https://docs.python.org/3.11/library/tempfile.html#tempfile.gettempdir) but can be repositioned using `--temporary-directory` or the `TMPDIR` environment variable. By default, the training state is kept in the same place as the configuration file. If training is interrupted, re-running the trainer should resume from where it was (depending on how much your neural network trainer has buffered, that part will be skipped).
+
+
 ## Configuration file
 Define your training process via a configuration file. You define the datasets on top, the stages and then for each stage a mixing criteria and a stage termination criteria. An example configuration file is provided below. The path to the `trainer` is a path to any neural network trainer that supports having stdin as training input format.
 ```yml
@@ -51,66 +78,114 @@ end:
   - until dirty 5 # use `inf` to mean until forever
 
 modifiers:
-- UpperCase: 0.05 # Apply uppercase randomly to 0.05% of sentences. Set to 0 to disable, or remove line entirely.
-- TitleCase: 0.05 # Apply titlecase randomly to 0.05% of sentences.
-#- Tags: 0.08 # Requires dataset augmented with alignment info, appended to the
-  #  custom_detok_src: null # Null value for the src detokenizer
-  #  custom_detok_trg: zh
-  #  # template: "__source__ {src} __target__ {trg} __done__" # This is the default way of inserting tags. Beware of changing it.
-                                               # DO NOT include it in the config as it's a default parameter.
-# - Typos: 0.05 # Consider 5% of the input sentences to contain plausible typos.
-#               # You can specify which modifiers to apply, or just apply each
-#               # of them with a default 10% probability that a particular
-#               # modifier is applied once to the sentence that is considered.
-#   char_swap:     0.1 # Swaps two random consecutive word characters in the string.
-#   missing_char:  0.1 # Skips a random word character in the string.
-#   extra_char:    0.1 # Adds an extra, keyboard-neighbor, letter next to a random word character.
-#   nearby_char:   0.1 # Replaces a random word character with keyboard-neighbor letter.
-#   similar_char:  0.1 # Replaces a random word character with another visually similar character.
-#   skipped_space: 0.1 # Skips a random space from the string.
-#   random_space:  0.1 # Adds a random space in the string.
-#   repeated_char: 0.1 # Repeats a random word character.
-#   unichar:       0.1 # Replaces a random consecutive repeated letter with a single letter. 
-#
-## Prefix modifier. Prepends a random subsection of the target sentence before the source sentence. Useful for teaching
-## the model to force decode a specific string if the user is absolutely certain it has to appear in the output.
-## For example "I like pie. Me gustan los pasteles."
-## Becomes "__start__ los pasteles __end__ I like pie. Me gustan los pasteles.
-#  - Prefix: 0.5 # Prefix must always be used after "Tags", but ideally never used together with "Tags"
-#    min_words: 2
-#    max_words: 5
-#    #template: "__start__ {trg} __end__ " # # We STRONGLY DISCOURAGE the modification of this line and in fact it shouldn't be included in the config
-#    # unless you really know what you are doing.
+- UpperCase: 0.05 # Apply uppercase randomly to 5% of sentences. See below
+- TitleCase: 0.05
 
 seed: 1111
 trainer: /path/to/trainer/run.py
 ```
 
-## Usage
-```bash
-% ./trainer.py --help
-usage: trainer.py [-h] --config CONFIG [--temporary-directory TEMPORARY_DIR] [--state STATE_FILE] [--do-not-resume] [--sync] [trainer-command [arguments]]
+### Extended stage configuration
+If you want to change which modifiers are used for a specific stage, you can the extended stage configuration format. If a `modifiers` is mentioned here, it will override the curriculum-wide defined `modifiers` for just this stage.
 
-Feeds marian tsv data for training.
+In the extended format, the list of datasets is defined in the `mix` key. You can optionally add a `modifiers` key. For example: 
 
-options:
-  -h, --help            show this help message and exit
-  --config CONFIG, -c CONFIG
-                        YML configuration input.
-  --temporary-directory TEMPORARY_DIR, -t TEMPORARY_DIR
-                        Temporary dir, used for shuffling and tracking state
-  --state STATE_FILE    Path to trainer state file which stores how much of
-                        each dataset has been read. Defaults to ${CONFIG}.state
-  --sync                Do not shuffle in the background
-  --do-not-resume, -d   Do not resume from the previous training state
+```yaml
+start:
+  mix:
+  - clean 0.8
+  - medium 0.2
+  - dirty 0
+  - until clean 2 # Until two epochs of clean
+  modifiers:
+    - UpperCase: 0.05
+    - TitleCase: 0.05
 ```
-Once you fix the paths in the configuration file, `train_config.yml` you can run a test case by doing:
-```bash
-./trainer.py -c train_config.yml /path/to/marian -c marian_config --any --other --flags
-```
-You can check resulting mixed file in `/tmp/test`. If your neural network trainer doesn't support training from `stdin`, you can use this tool to generate a training dataset and then disable data reordering or shuffling at your trainer implementation, as your training input should be balanced.
 
-At the start of the training all datasets are shuffled. Each time a dataset's end is reached, it is re-shuffled. Shuffling [in the system temp directory](https://docs.python.org/3.11/library/tempfile.html#tempfile.gettempdir) but can be repositioned using `--temporary-directory` or the `TMPDIR` environment variable. By default, the training state is kept in the same place as the configuration file. If training is interrupted, re-running the trainer should resume from where it was (depending on how much your neural network trainer has buffered, that part will be skipped).
+Note that you can use YAML references if you wish to extensively combine global and local modifiers.
+
+### Modifiers
+Modifiers are randomly applied to the sentences that go into the trainer. Each modifier has a probability associated with it that is the chance that a sentence is modified by the modifier. E.g. a modifier with a probability of 0.05 will affect about 1 in every 20 sentences.
+
+Modifiers are applied one after another, in the order you defined them, all with their own probability regardless of the modifiers that got applied before it. E.g. if you have the following configuration:
+
+```yaml
+modifiers:
+- UpperCase: 0.05
+- TitleCase: 0.05
+```
+
+This means that 1 in 20 sentences will be uppercased, and 1 in 20 will be titlecased. And effectively `0.05 * 0.05` so 1 in 400 will first be uppercased and then titlecased.
+
+#### UpperCase
+Turns the entire source and target sentence to upper case, e.g. 'heLLo' becomes 'HELLO'.
+
+```yaml
+modifiers:
+  - UpperCase: 0.05
+```
+
+#### TitleCase
+Makes the first letter of every word uppercase, and the rest lowercase. Words are split by spaces. E.g. 'heLLo' becomes 'Hello'.
+
+```yaml
+modifiers:
+  - TitleCase: 0.05
+```
+
+#### Typos
+Introduce typos in the source side of the sentence pair.
+
+The probability of the modifier itself is the chance a sentence is affected. The probabilities of each of the types of typos describes the chance a word is affected. Each type of typo occurs at most once in a sentence.
+
+You can specify a probability for each modifier individually. If any of the typo classes is omitted, it has a probability of 0. Alternatively, you can omit all typo classes. Then all of them will have a default 10% probability.
+
+```yaml
+modifiers:
+- Typos: 0.05
+  char_swap:     0.1 # Swaps two random consecutive word characters in the string.
+  missing_char:  0.1 # Skips a random word character in the string.
+  extra_char:    0.1 # Adds an extra, keyboard-neighbor, letter next to a random word character.
+  nearby_char:   0.1 # Replaces a random word character with keyboard-neighbor letter.
+  similar_char:  0.1 # Replaces a random word character with another visually similar character.
+  skipped_space: 0.1 # Skips a random space from the string.
+  random_space:  0.1 # Adds a random space in the string.
+  repeated_char: 0.1 # Repeats a random word character.
+  unichar:       0.1 # Replaces a random consecutive repeated letter with a single letter. 
+````
+
+#### Tags
+Adds a placeholder tag to the source sentence that can be used by the model to hint how it should translate that word. The word to hint is chosen at random from the target sentence. Only words with a 1-to-1 mapping between source and target are considered.
+
+This modifier needs a third column in the training data with per-word alignment information.
+
+```yaml
+- Tags: 0.05
+  custom_detok_src: null
+  custom_detok_trg: zh
+  template: "__source__ {src} __target__ {trg} __done__"
+```
+
+All options are optional.
+
+You can specify custom detokenizer languages using `custom_detok_src` and `custom_detok_trg` if the dataset you're reading from has been tokenized by the Moses tokenizer. This can be helpful to do for languages that do not use spaces to delimit words. The default tokenisation strategy is splitting/joining by spaces.
+
+The format for telling the translation model the intention to translate a word in a certain way can be controlled by `template`. Here `{src}` and `{trg}` are replaced by the selected words from the source and target side of the sentence pair.
+
+#### Prefix
+Prepends a random subsection of the target sentence before the source sentence. 
+
+This is useful for teaching the model to force decode a specific string if the user is absolutely certain it has to appear in the output. For example `I like pie. Me gustan los pasteles.` becomes `__start__ los pasteles __end__ I like pie. Me gustan los pasteles.`
+
+Note: The Prefix modifier must always be used as the last modifier, but ideally never used together with "Tags".
+
+```yaml
+modifiers:
+ - Prefix: 0.5
+   min_words: 2
+   max_words: 5
+   template: "__start__ {trg} __end__ "
+```
 
 ### Tags
 In order to train models supporting vocabulary "hints" we provide a tags system where we laverage word alignment information to provide "hints" for the translation model to what it should produce on the Target side. The work is very similar to [Dinu et al. 2019](https://aclanthology.org/P19-1294/). An example. Given an alignment augmented tsv training line:
