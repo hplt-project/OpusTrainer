@@ -149,7 +149,7 @@ class Reader(Iterable[bytes]):
 		assert child.stdout is not None
 		yield from child.stdout
 		if child.wait() != 0:
-			raise RuntimeError(f'`gzip -cd {filename}` failed with return code {child.returncode}')		
+			raise RuntimeError(f'`{PATH_TO_GZIP} -cd {filename}` failed with return code {child.returncode}')
 
 	def _read_plain(self, filename:str) -> Iterable[bytes]:
 		with open(filename, 'rb') as fh:
@@ -167,6 +167,7 @@ def main() -> None:
 	parser.add_argument('--batch-size', type=int, default=1_000_000, help='number of lines per chunk. Note that these chunks are read into memory when being shuffled')
 	parser.add_argument('--threads', '-j', type=int, default=0, help=f'number of concurrent shuffle threads. Defaults to none')
 	parser.add_argument('--temporary-directory', '-T', type=str, help='temporary directory for shuffling batches')
+	parser.add_argument('--do-not-shuffle', '-d', action="store_true", help='Do not shuffle, to be used for debugging')
 	parser.add_argument('seed', type=int)
 	parser.add_argument('output', type=FileType('wb', bufsize=BUFSIZE), default='-')
 	parser.add_argument('files', nargs='+')
@@ -177,7 +178,8 @@ def main() -> None:
 	it: Iterable[bytes] = chain.from_iterable(Reader(filename) for filename in args.files)
 
 	# Shuffle the lines
-	it = shuffle(it, lines=args.batch_size, seed=args.seed, threads=args.threads, tmpdir=args.temporary_directory)
+	if not args.do_not_shuffle:
+		it = shuffle(it, lines=args.batch_size, seed=args.seed, threads=args.threads, tmpdir=args.temporary_directory)
 
 	args.output.writelines(it)
 

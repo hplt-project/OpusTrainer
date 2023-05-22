@@ -115,12 +115,13 @@ class DatasetReader:
     seed: int
     line: int
     epoch: int
+    no_shuffle: bool
 
     tmpdir: Optional[str]
 
     _fh: Optional[TextIO] = None
 
-    def __init__(self, dataset:Dataset, seed:int, tmpdir:Optional[str]=None):
+    def __init__(self, dataset:Dataset, seed:int, tmpdir:Optional[str]=None, no_shuffle:bool=False):
         """
         Parameters
         ----------
@@ -136,6 +137,7 @@ class DatasetReader:
         self.tmpdir = tmpdir
         self.epoch = 0
         self.line = 0
+        self.no_shuffle = no_shuffle
 
     def state(self) -> DatasetState:
         return DatasetState(self.seed, self.line, self.epoch)
@@ -168,6 +170,7 @@ class DatasetReader:
         # sure if that has any performance or stability benefits/drawbacks.
         subprocess.check_call([sys.executable, PATH_TO_SHUFFLE,
             *(['--temporary-directory', self.tmpdir] if self.tmpdir else []),
+            *(['--do-not-shuffle'] if self.no_shuffle else []),
             str(self.seed),
             f'/dev/fd/{fh.fileno()}',
             *self.dataset.files
@@ -235,6 +238,7 @@ class AsyncDatasetReader(DatasetReader):
             file=cast(TextIO, fh),
             proc=subprocess.Popen([sys.executable, PATH_TO_SHUFFLE,
                 *(['--temporary-directory', self.tmpdir] if self.tmpdir else []),
+                *(['--do-not-shuffle'] if self.no_shuffle else []),
                 str(seed),
                 f'/dev/fd/{fh.fileno()}',
                 *self.dataset.files
@@ -519,16 +523,21 @@ class Trainer:
 
     # Path to write temporary shuffled files to
     tmpdir:Optional[str]
+    # For debugging purposes, whether to shuffle or not
+    no_shuffle:bool
 
     # Reader class to use (I.e. DatasetReader or AsyncDatasetReader)
     _reader_impl: Type[DatasetReader]
 
-    def __init__(self, curriculum:Curriculum, *, reader:Type[DatasetReader] = DatasetReader, tmpdir:Optional[str]=None):
+    def __init__(self, curriculum:Curriculum, *, reader:Type[DatasetReader] = DatasetReader, tmpdir:Optional[str]=None, no_shuffle:bool=False):
         self.curriculum = curriculum
         self.tmpdir = tmpdir
+        self.no_shuffle = no_shuffle
         self._reader_impl = reader
         random.seed(self.curriculum.seed)
         first_stage_name = self.curriculum.stages_order[0]
+        if (self.no_shuffle):
+            print("NO SHUFFLE: ", self.no_shuffle)
 
         #TODO: make sure this doesn't do too much work in case we call
         # restore() manually anyway.
@@ -546,7 +555,7 @@ class Trainer:
         random.setstate(state.random_state)
         self.stage = self.curriculum.stages[state.stage]
         self.readers = {
-            dataset.name: self._reader_impl(dataset, self.curriculum.seed, tmpdir=self.tmpdir).restore(state.datasets[dataset.name])
+            dataset.name: self._reader_impl(dataset, self.curriculum.seed, tmpdir=self.tmpdir, no_shuffle=self.no_shuffle).restore(state.datasets[dataset.name])
             for dataset in self.curriculum.datasets.values()
         }
         self.epoch_tracker = EpochTracker(self.readers[self.stage.until_dataset]).restore(state.epoch_tracker_state)
@@ -604,7 +613,8 @@ class Trainer:
                 for modifier in modifiers:
                     batch = [modifier(line.rstrip('\n')) + '\n' for line in batch]
 
-                random.shuffle(batch)
+                if not self.no_shuffle:
+                    random.shuffle(batch)
 
                 # Tell anyone whose listening that something interesting happened
                 # TODO: Yield something useful, e.g. progress.
@@ -682,6 +692,7 @@ def main() -> None:
     parser.add_argument("--sync", action="store_true", help="Do not shuffle async")
     parser.add_argument("--temporary-directory", '-T', default=None, type=str, help='Temporary dir, used for shuffling and tracking state')
     parser.add_argument("--do-not-resume", '-d', action="store_true", help='Do not resume from the previous training state')
+    parser.add_argument("--no-shuffle", '-n', action="store_true", help='Do not shuffle, for debugging')
     parser.add_argument("trainer", type=str, nargs=argparse.REMAINDER, help="Trainer program that gets fed the input. If empty it is read from config.")
 
     args = parser.parse_args()
@@ -697,7 +708,7 @@ def main() -> None:
         if missing_files:
             raise ValueError(f"Dataset '{dataset.name}' is missing files: {missing_files}")
 
-    trainer = Trainer(curriculum, reader=DatasetReader if args.sync else AsyncDatasetReader, tmpdir=args.temporary_directory)
+    trainer = Trainer(curriculum, reader=DatasetReader if args.sync else AsyncDatasetReader, tmpdir=args.temporary_directory, no_shuffle=args.no_shuffle)
 
     state_tracker = StateTracker(args.state or f'{args.config}.state', restore=not args.do_not_resume)
 
