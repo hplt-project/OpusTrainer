@@ -14,7 +14,7 @@ import time
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from enum import Enum
-from typing import List, Tuple, Dict, Set, Any, Optional, Union, Type, TextIO, cast, Iterable, Literal
+from typing import List, Tuple, Dict, Set, Any, Optional, Union, Type, TextIO, cast, Iterable, Literal, Iterable, Callable, TypeVar
 from tempfile import TemporaryFile
 from itertools import islice
 from functools import partial
@@ -510,6 +510,18 @@ class EpochTracker:
         return EpochTrackerState(self.epoch_offset, self.line_offset)
 
 
+In = TypeVar('In')
+
+Out = TypeVar('Out')
+
+def trace_map(fn: Callable[[In], Out], items: Iterable[In]) -> Iterable[Out]:
+    for n, item in enumerate(items):
+        try:
+            yield fn(item)
+        except Exception as exc:
+            raise Exception(f'Exception while processing item {n}: {item!r}') from exc
+
+
 class Trainer:
     """Writes lines to a trainer program according to the curriculum."""
     curriculum: Curriculum
@@ -601,8 +613,9 @@ class Trainer:
                 else:
                     modifiers = self.curriculum.modifiers
 
-                for modifier in modifiers:
-                    batch = [modifier(line.rstrip('\n')) + '\n' for line in batch]
+                # TODO: maybe make this self.stage.modifiers? Would that make sense?
+                for modifier in self.curriculum.modifiers:
+                    batch = list(trace_map(lambda line: modifier(line.rstrip('\r\n')) + '\n', batch))
 
                 random.shuffle(batch)
 

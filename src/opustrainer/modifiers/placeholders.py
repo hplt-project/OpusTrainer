@@ -168,12 +168,6 @@ def get_random_unicode_string(min_length: int=1, max_length: int=4, max_words: i
     )
 
 
-def tuplify(pair: str) -> Tuple[int, int]:
-    """Parses "x-y" description of an aligned token pair into `(x,y)` tuple of ints."""
-    s, t = pair.split('-')
-    return (int(s), int(t))
-
-
 def filter_tuples(inlist: List[Tuple[int, int]]) -> List[Tuple[int, int]]:
     """Removes places non x->y x->z type of alignments. Remove anything that is found multiple
        times. Anything that is found multiple times means non bijective alignment. Since they
@@ -198,12 +192,17 @@ def filter_tuples(inlist: List[Tuple[int, int]]) -> List[Tuple[int, int]]:
     return new_list
 
 
-def get_placeholding_candidates(align_line: str) -> List[Tuple[int, int]]:
+def parse_alignments(line:str) -> List[Tuple[int,int]]:
+    """Parses list of "x-y" description of an aligned token pair into `(x,y)` tuples of ints."""
+    return [(int(s), int(t)) for s, t in (pair.split('-') for pair in line.split())]
+
+
+def get_placeholding_candidates(alignments: List[Tuple[int,int]]) -> List[Tuple[int, int]]:
     """Filters out multiple alignment targets so that we can definitely get a one-to-one
        replacement
     """
     # Create the two src-trg and trg-src sets
-    src_trg: List[Tuple[int, int]] = [tuplify(i) for i in align_line.split()]
+    src_trg: List[Tuple[int, int]] = alignments
     trg_src: List[Tuple[int, int]] = [(c, d) for d,c in src_trg]
 
     src_trg_filtered: List[Tuple[int, int]] = filter_tuples(src_trg)
@@ -291,9 +290,15 @@ class PlaceholderTagModifier(Modifier):
         src, trg, alignment = line.strip().split('\t')
         source = src.split(' ')
         target = trg.split(' ')
+        alignments = parse_alignments(alignment)
+
+        if max(s for s, _ in alignments) >= len(source):
+            raise ValueError('alignment pair source token index out of range')
+        if max(t for _, t in alignments) >= len(target):
+            raise ValueError('alignment pair target token index out of range')
 
         # Get replacement candidates
-        candidates: List[Tuple[int, int]] = get_placeholding_candidates(alignment)
+        candidates: List[Tuple[int, int]] = get_placeholding_candidates(alignments)
 
         # Replace each of them with a THRESHOLD probability unless the two words are exactly the same
         # This is to avoid having numbers trained with placeholders or any other words that are exactly the same

@@ -293,3 +293,33 @@ class TestCurriculumLoader(unittest.TestCase):
 		self.assertEqual(len(curriculum.stages['start'].datasets), 1)
 		self.assertEqual(curriculum.stages['start'].until_dataset, 'clean')
 		self.assertTrue(curriculum.stages['start'].modifiers is not None and len(curriculum.stages['start'].modifiers) == 1)
+
+	def test_modifier_error_line_context(self):
+		"""Test that when a modifier fails, we get context information about the line that failed"""
+		with tempfile.NamedTemporaryFile('w', encoding='utf-8') as fd:
+			fd.write('This is a test\tDas ist ein Test\t0-0 1-1 2-2 3-3\n')
+			fd.write('Hello world\tHallo Welt\t0-0 1-2\n') # 2 is out-of-bounds
+			fd.flush()
+
+			config = {
+				'datasets': {
+					'clean': fd.name,
+				},
+				'stages': [
+					'start'
+				],
+				'start': [
+					'clean 1.0',
+					'until clean 1'
+				],
+				'modifiers': [
+					{'Tags': 1.0}
+				],
+				'seed': 1
+			}
+			curriculum = CurriculumLoader().load(config)
+
+			trainer = Trainer(curriculum)
+			
+			with self.assertRaisesRegex(Exception, "Exception while processing item 1:"):
+				list(trainer.run(batch_size=2))

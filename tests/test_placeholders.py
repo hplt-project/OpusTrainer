@@ -14,6 +14,11 @@ class TestTagger(unittest.TestCase):
     output = tagger('Hello world\tHallo Welt\t0-0 1-1')
     self.assertEqual(output, '__source__ Hello __target__ Hallo __done__ __source__ world __target__ Welt __done__\tHallo Welt')
 
+  def test_tagger_out_of_index(self):
+    tagger = PlaceholderTagModifier(probability=1)
+    with self.assertRaisesRegex(ValueError, 'alignment pair target token index out of range'):
+      output = tagger('Hello world\tHallo Welt\t0-0 1-2')
+
   def test_tagger_augment(self):
     random.seed(1)
     tagger = PlaceholderTagModifier(probability=1, augment=1)
