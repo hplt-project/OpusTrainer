@@ -35,6 +35,7 @@ options:
                         each dataset has been read. Defaults to ${CONFIG}.state
   --sync                Do not shuffle in the background
   --do-not-resume, -d   Do not resume from the previous training state
+  --no-shuffle, -n      Do not shuffle, for debugging
 ```
 Once you fix the paths in the configuration file, `train_config.yml` you can run a test case by doing:
 ```bash
@@ -48,7 +49,7 @@ At the start of the training all datasets are shuffled. Each time a dataset's en
 ## Configuration file
 Define your training process via a configuration file. You define the datasets on top, the stages and then for each stage a mixing criteria and a stage termination criteria. An example configuration file is provided below. The path to the `trainer` is a path to any neural network trainer that supports having stdin as training input format.
 ```yml
-# Datasets are already TSV files
+# Datasets are already TSV files. We support reading gzip'd files, as well as multiple dataset file per name
 datasets:
   clean: test/data/clean
   medium: test/data/medium
