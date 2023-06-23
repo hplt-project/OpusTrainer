@@ -1,0 +1,21 @@
+# Datasets are already TSV files
+datasets:
+  clean: test-data/clean.enzh.10
+
+stages:
+  - start
+
+start:
+  - clean  1
+  - until clean 1
+
+modifiers:
+  - UpperCase: 0.2
+  - TitleCase: 0.2
+  - Noise: 0.6
+    min_word_legnth: 1
+    max_word_length: 3
+    max_words: 10
+
+seed: 1111
+trainer: cat

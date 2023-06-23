@@ -155,6 +155,16 @@ modifiers:
   unichar:       0.1 # Replaces a random consecutive repeated letter with a single letter. 
 ````
 
+#### Noise
+Augments the training data with sentences that are pure nonsensitcal noise. They are identical on the source and target sides and teach the model to learn to deal with unknown input.
+```yaml
+modifiers:
+    - Noise: 0.01
+    min_word_legnth: 2 # Minumum lenght of each fake word, defaults is 2 if left blank
+    max_word_length: 5 # Maximum lenght of each fake word, defaults is 5 if left blank
+    max_words: 4       # Maximu number of fake words, default is 4 if left blank
+```
+
 #### Tags
 Adds a placeholder tag to the source sentence that can be used by the model to hint how it should translate that word. The word to hint is chosen at random from the target sentence. Only words with a 1-to-1 mapping between source and target are considered.
 

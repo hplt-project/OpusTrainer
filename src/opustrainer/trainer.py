@@ -11,17 +11,15 @@ import random
 import subprocess
 import time
 
-from abc import ABC, abstractmethod
 from dataclasses import dataclass
-from enum import Enum
-from typing import List, Tuple, Dict, Set, Any, Optional, Union, Type, TextIO, cast, Iterable, Literal, Iterable, Callable, TypeVar
+from typing import List, Tuple, Dict, Any, Optional, Union, Type, TextIO, cast, Iterable, Iterable, Callable, TypeVar
 from tempfile import TemporaryFile
 from itertools import islice
-from functools import partial
 
 import yaml
 
 from opustrainer.modifiers import Modifier
+from opustrainer.modifiers.noise import NoiseModifier
 from opustrainer.modifiers.prefix import PrefixModifier
 from opustrainer.modifiers.surface import UpperCaseModifier, TitleCaseModifier
 from opustrainer.modifiers.placeholders import PlaceholderTagModifier
@@ -46,7 +44,8 @@ MODIFIERS = {
     'TitleCase': TitleCaseModifier,
     'Tags': PlaceholderTagModifier,
     'Typos': TypoModifier,
-    'Prefix': PrefixModifier
+    'Prefix': PrefixModifier,
+    'Noise': NoiseModifier
 }
 
 @dataclass(frozen=True)
