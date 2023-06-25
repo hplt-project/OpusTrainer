@@ -618,12 +618,12 @@ class Trainer:
                 # Apply any modifiers to random lines in the batch, or sentence
                 # (Multiple modifiers could be applied to the same line!)
                 if self.stage.modifiers is not None:
-                    modifiers = self.stage.modifiers
+                    modifiers = self.stage.modifiers + self.curriculum.modifiers
                 else:
                     modifiers = self.curriculum.modifiers
 
                 # TODO: maybe make this self.stage.modifiers? Would that make sense?
-                for modifier in self.curriculum.modifiers:
+                for modifier in modifiers:
                     batch = list(trace_map(lambda line: modifier(line.rstrip('\r\n')) + '\n', batch))
 
                 if self.shuffle:

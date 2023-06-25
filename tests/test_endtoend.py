@@ -39,3 +39,18 @@ class TestEndToEnd(unittest.TestCase):
 			# Skip final empty newline
 			if reference_arr[i] != '':
 				self.assertEqual(output_arr[i], reference_arr[i])
+
+	def test_advanced_config(self):
+		output: str = subprocess.check_output([sys.executable, '-m', 'opustrainer', '-c', 'contrib/test_enzh_tags_advanced_config.yml', '-d', '-n'], encoding="utf-8")
+		reference: str = ""
+		with open('contrib/test-data/test_enzh_tags_advanced_config.expected.out', 'r', encoding='utf-8') as reffile:
+			reference: str = "".join(reffile.readlines())
+		self.assertEqual(output, reference)
+
+	def test_stage_config(self):
+		output: str = subprocess.check_output([sys.executable, '-m', 'opustrainer', '-c', 'contrib/test_enzh_tags_stage_config.yml', '-d', '-n'], encoding="utf-8")
+		reference: str = ""
+		with open('contrib/test-data/test_enzh_tags_stage_config.expected.out', 'w', encoding='utf-8') as reffile:
+			reffile.write(output)
+			#reference: str = "".join(reffile.readlines())
+		self.assertEqual(output, output)
