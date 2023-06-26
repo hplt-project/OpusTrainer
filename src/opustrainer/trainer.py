@@ -199,11 +199,18 @@ class DatasetReader:
         assert self._fh is not None
         try:
             # Try to read the next line from our shuffled file
-            line = self._fh.readline()
-            if line == '':
-                raise StopIteration
-            self.line += 1
-            return line
+            while True:
+                line = self._fh.readline()
+                if line == '':
+                    raise StopIteration
+                self.line += 1
+                # assert that the line is well formed, meaning non of the fields is the empty string
+                # If not, try to get a new line from the corpus
+                testline: List[str] = line.rstrip('/r/n').strip().split('/t')
+                for field in testline:
+                    if field == "":
+                        continue
+                return line
         except StopIteration:
             if just_opened:
                 raise RuntimeError('reading from empty shuffled file')
