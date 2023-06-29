@@ -26,6 +26,7 @@ from opustrainer.modifiers.prefix import PrefixModifier
 from opustrainer.modifiers.surface import UpperCaseModifier, TitleCaseModifier
 from opustrainer.modifiers.placeholders import PlaceholderTagModifier
 from opustrainer.modifiers.typos import TypoModifier
+from opustrainer import logger
 
 def ignore_sigint():
     """Used as pre-exec hook for the trainer program as to ignore ctrl-c. We'll
@@ -161,7 +162,7 @@ class DatasetReader:
             self._fh.close()
 
     def _open(self):
-        print(f"[Trainer] Reading {self.dataset.name} for epoch {self.epoch}")
+        logger.log(f"Reading {self.dataset.name} for epoch {self.epoch}")
         # Open temporary file which will contain shuffled version of `cat self.files`
         fh = TemporaryFile(mode='w+', encoding='utf-8', dir=self.tmpdir)
 
@@ -257,7 +258,7 @@ class AsyncDatasetReader(DatasetReader):
         self._pending = None
 
     def _open(self):
-        print(f"[Trainer] Reading {self.dataset.name} for epoch {self.epoch}")
+        logger.log(f"Reading {self.dataset.name} for epoch {self.epoch}")
 
         # First time self._pending is None, but all subsequent calls to _open
         # should have self._pending be set.
@@ -606,7 +607,7 @@ class Trainer:
     def run(self, *, batch_size:int=100) -> Iterable[List[str]]:
         """Yield batches, moving through the stages of training as datasets are consumed."""
         while self.stage is not None:
-            print(f"[Trainer] Starting stage {self.stage.name}")
+            logger.log(f"Starting stage {self.stage.name}")
             while self.stage.until_epoch is None or self.epoch_tracker.epoch < self.stage.until_epoch:
                 batch: List[str] = []
 
@@ -692,10 +693,10 @@ class StateTracker:
                 self._dump(trainer)
 
 
-def print_state(state:TrainerState, file:TextIO=sys.stdout) -> None:
-    print(f"[Trainer] At stage {state.stage}", file=file)
+def print_state(state:TrainerState) -> None:
+    logger.log(f"At stage {state.stage}")
     for name, reader in state.datasets.items():
-        print(f"[Trainer] Dataset {name}: overall epochs {reader.epoch: 3d}.{reader.line:010d}", file=file)
+        logger.log(f"Dataset {name}: overall epochs {reader.epoch: 3d}.{reader.line:010d}")
 
 
 def main() -> None:
@@ -706,9 +707,12 @@ def main() -> None:
     parser.add_argument("--temporary-directory", '-T', default=None, type=str, help='Temporary dir, used for shuffling and tracking state')
     parser.add_argument("--do-not-resume", '-d', action="store_true", help='Do not resume from the previous training state')
     parser.add_argument("--no-shuffle", '-n', action="store_false", help='Do not shuffle, for debugging', dest="shuffle")
+    parser.add_argument("--log-level", type=str, default="INFO", help="Set log level. Available levels: DEBUG, INFO, WARNING, ERROR, CRITICAL")
+    parser.add_argument("--log-file", '-l', type=str, default=None, help="Target location for logging. Default is stderr.")
     parser.add_argument("trainer", type=str, nargs=argparse.REMAINDER, help="Trainer program that gets fed the input. If empty it is read from config.")
 
     args = parser.parse_args()
+    logger.setup_logger(args.log_file, args.log_level)
 
     with open(args.config, 'r', encoding='utf-8') as fh:
         config = yaml.safe_load(fh)
@@ -726,7 +730,7 @@ def main() -> None:
     state_tracker = StateTracker(args.state or f'{args.config}.state', restore=not args.do_not_resume)
 
     # Make trainer listen to `kill -SIGUSR1 $PID` to print dataset progress
-    signal.signal(signal.SIGUSR1, lambda signum, handler: print_state(trainer.state(), sys.stderr))
+    signal.signal(signal.SIGUSR1, lambda signum, handler: print_state(trainer.state()))
 
     model_trainer = subprocess.Popen(
         args.trainer or config['trainer'],
@@ -749,7 +753,7 @@ def main() -> None:
             for batch in state_tracker.run(trainer):
                 model_trainer.stdin.writelines(batch)
         except KeyboardInterrupt:
-            print("[Trainer] Ctrl-c pressed, stopping training")
+            logger.log("Ctrl-c pressed, stopping training")
 
         # Levels of waiting for the trainer. This is reached either because we ran out of batches
         # or because ctrl-c was pressed. Pressing ctrl-c more advances to next level of aggressiveness.
@@ -761,8 +765,8 @@ def main() -> None:
                     model_trainer.terminate()
                 else:
                     model_trainer.kill()
-
-                print(f"[Trainer] waiting for trainer to {stage}. Press ctrl-c to be more aggressive")
+                
+                logger.log(f"waiting for trainer to {stage}. Press ctrl-c to be more aggressive")
                 sys.exit(model_trainer.wait()) # blocking
             except KeyboardInterrupt:
                 continue
@@ -770,7 +774,7 @@ def main() -> None:
         # BrokenPipeError is thrown by writelines() or close() and indicates that the child trainer
         # process is no more. We can safely retrieve its return code and exit with that, it should
         # not block at this point.
-        print("[Trainer] trainer stopped reading input")
+        logger.log("trainer stopped reading input")
         sys.exit(model_trainer.wait())
 
 
