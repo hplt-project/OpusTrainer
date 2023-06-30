@@ -1,5 +1,6 @@
 import logging
 from sys import stderr
+from typing import List
 from functools import lru_cache
 
 def getLogLevel(name: str) -> int:
@@ -23,9 +24,10 @@ def log_once(msg: str, loglevel: str = "INFO") -> None:
 
 
 def setup_logger(outputfilename: str | None = None, loglevel: str = "INFO") -> None:
-    """Sets up the logger with the necessary settings"""
+    """Sets up the logger with the necessary settings. Outputs to both file and stderr"""
     loggingformat = '[%(asctime)s] [Trainer] [%(levelname)s] %(message)s'
-    if outputfilename is None:
-        logging.basicConfig(stream=stderr, encoding='utf-8', level=getLogLevel(loglevel), format=loggingformat, datefmt='%Y-%m-%d %H:%M:%S')
-    else:
-        logging.basicConfig(filename=outputfilename, encoding='utf-8', level=getLogLevel(loglevel), format=loggingformat, datefmt='%Y-%m-%d %H:%M:%S')
+    handlers = [logging.StreamHandler(stream=stderr)]
+    if outputfilename is not None:
+        handlers.append(logging.FileHandler(filename=outputfilename))
+    logging.basicConfig(handlers=handlers, encoding='utf-8', level=getLogLevel(loglevel), format=loggingformat, datefmt='%Y-%m-%d %H:%M:%S')
+
