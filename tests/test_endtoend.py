@@ -50,7 +50,6 @@ class TestEndToEnd(unittest.TestCase):
 	def test_stage_config(self):
 		output: str = subprocess.check_output([sys.executable, '-m', 'opustrainer', '-c', 'contrib/test_enzh_tags_stage_config.yml', '-d', '-n'], encoding="utf-8")
 		reference: str = ""
-		with open('contrib/test-data/test_enzh_tags_stage_config.expected.out', 'w', encoding='utf-8') as reffile:
-			reffile.write(output)
-			#reference: str = "".join(reffile.readlines())
-		self.assertEqual(output, output)
+		with open('contrib/test-data/test_enzh_tags_stage_config.expected.out', 'r', encoding='utf-8') as reffile:
+			reference: str = "".join(reffile.readlines())
+		self.assertEqual(output, reference)
