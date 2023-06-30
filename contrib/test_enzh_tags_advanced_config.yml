@@ -6,6 +6,9 @@ stages:
   - start
   - end
 
+modifiers: &modifiers
+  - UpperCase: 0.3
+
 start:
   mix:
     - clean 1
@@ -15,6 +18,7 @@ start:
       custom_detok_src: null
       custom_detok_trg: null
       template: "{src} __target__ {trg} __done__"
+    - *modifiers
 
 end:
   mix:
@@ -25,9 +29,7 @@ end:
       custom_detok_src: null
       custom_detok_trg: zh
       template: "{src} __target__ {trg} __done__"
-
-modifiers:
-  - UpperCase: 0.3
+    - *modifiers
 
 seed: 1111
 trainer: cat
