@@ -7,6 +7,10 @@ import unittest
 from typing import IO, Type
 from collections import Counter
 from contextlib import closing
+from textwrap import dedent
+from io import StringIO
+
+import yaml
 
 from opustrainer.trainer import Curriculum, CurriculumLoaderError, Dataset, DatasetReader, AsyncDatasetReader, CurriculumLoader, Trainer, StateTracker, Stage
 
@@ -293,6 +297,37 @@ class TestCurriculumLoader(unittest.TestCase):
 		self.assertEqual(len(curriculum.stages['start'].datasets), 1)
 		self.assertEqual(curriculum.stages['start'].until_dataset, 'clean')
 		self.assertTrue(curriculum.stages['start'].modifiers is not None and len(curriculum.stages['start'].modifiers) == 1)
+
+	def test_combined_stage_configuration(self):
+		"""Test that in the extended stage configuration modifier lists are
+		flattened which allows us to use YAML references more easily."""
+
+		# Writing this in YAML directly to reflect how this is intended to be useful
+		config_yaml = dedent("""
+			datasets:
+				clean: contrib/test-data/clean
+
+			stages:
+			- start
+
+			modifiers: &global_modifiers
+			- TitleCase: 0.5
+			
+			start:
+				mix: 
+				- clean 1.0
+				- until clean 1
+				modifiers:
+				- UpperCase: 0.5
+				- *global_modifiers
+			
+			seed: 1
+		""").replace("\t", "  ")
+
+		config = yaml.safe_load(StringIO(config_yaml))
+
+		curriculum = CurriculumLoader().load(config)
+		self.assertEqual([modifier.__class__.__name__ for modifier in curriculum.stages['start'].modifiers or []], ['UpperCaseModifier', 'TitleCaseModifier'])
 
 	def test_modifier_error_line_context(self):
 		"""Test that when a modifier fails, we get context information about the line that failed"""

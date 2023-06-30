@@ -1,6 +1,5 @@
 import random
 from typing import Callable, Type, List
-from functools import partial
 
 from opustrainer.modifiers import Modifier
 
@@ -14,7 +13,12 @@ class LineModifier(Modifier):
     @classmethod
     def wrap(cls, fn: Callable[[str], str]) -> Type['LineModifier']:
         """Utility function to wrap a function into a Modifier class."""
-        return partial(cls, fn)
+        class Wrapped(LineModifier):
+            def __init__(self, probability: float):
+                super().__init__(fn, probability)
+        Wrapped.__name__ = fn.__name__
+        Wrapped.__qualname__ = fn.__qualname__
+        return Wrapped
 
     def __init__(self, fun: Callable[[str], str], probability:float):
         super().__init__(probability)
