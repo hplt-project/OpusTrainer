@@ -615,14 +615,15 @@ class Trainer:
                 for dataset, weight in self.stage.datasets:
                     batch.extend(islice(self.readers[dataset.name], 0, int(batch_size * weight)))
 
-                # Apply any modifiers to random lines in the batch, or sentence
-                # (Multiple modifiers could be applied to the same line!)
+                # Stage level modifiers take precedence over global modifiers,
+                # but you can combine them yourself using YAML references.
                 if self.stage.modifiers is not None:
-                    modifiers = self.stage.modifiers + self.curriculum.modifiers
+                    modifiers = self.stage.modifiers
                 else:
                     modifiers = self.curriculum.modifiers
 
-                # TODO: maybe make this self.stage.modifiers? Would that make sense?
+                # Apply any modifiers to random lines in the batch, or sentence
+                # (Multiple modifiers can be applied to the same line!)
                 for modifier in modifiers:
                     batch = list(trace_map(lambda line: modifier(line.rstrip('\r\n')) + '\n', batch))
 
