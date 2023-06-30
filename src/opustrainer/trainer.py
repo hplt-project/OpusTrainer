@@ -333,6 +333,16 @@ class CurriculumLoaderError(ValueError):
     pass
 
 
+def flatten(iterable):
+    """Iterates recursively (depth-first) trough all items in a list with
+    possibly nested lists"""
+    for item in iterable:
+        if isinstance(item, list):
+            yield from flatten(item)
+        else:
+            yield item
+
+
 class CurriculumV1Loader:
     def load(self, ymldata:dict, *, basepath:str='./') -> Curriculum:
         datasets = self._load_datasets(ymldata, basepath)
@@ -446,7 +456,7 @@ class CurriculumV1Loader:
         """
         modifiers = [
             self._load_modifier(modifier_entry)
-            for modifier_entry in ymldata.get('modifiers', [])
+            for modifier_entry in flatten(ymldata.get('modifiers', []))
         ]
 
         for modifier in modifiers:
