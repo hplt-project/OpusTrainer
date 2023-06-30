@@ -341,6 +341,16 @@ class CurriculumLoaderError(ValueError):
     pass
 
 
+def flatten(iterable):
+    """Iterates recursively (depth-first) trough all items in a list with
+    possibly nested lists"""
+    for item in iterable:
+        if isinstance(item, list):
+            yield from flatten(item)
+        else:
+            yield item
+
+
 class CurriculumV1Loader:
     def load(self, ymldata:dict, *, basepath:str='./') -> Curriculum:
         datasets = self._load_datasets(ymldata, basepath)
@@ -454,7 +464,7 @@ class CurriculumV1Loader:
         """
         modifiers = [
             self._load_modifier(modifier_entry)
-            for modifier_entry in ymldata.get('modifiers', [])
+            for modifier_entry in flatten(ymldata.get('modifiers', []))
         ]
 
         for modifier in modifiers:
@@ -623,15 +633,16 @@ class Trainer:
                 for dataset, weight in self.stage.datasets:
                     batch.extend(islice(self.readers[dataset.name], 0, int(batch_size * weight)))
 
-                # Apply any modifiers to random lines in the batch, or sentence
-                # (Multiple modifiers could be applied to the same line!)
+                # Stage level modifiers take precedence over global modifiers,
+                # but you can combine them yourself using YAML references.
                 if self.stage.modifiers is not None:
                     modifiers = self.stage.modifiers
                 else:
                     modifiers = self.curriculum.modifiers
 
-                # TODO: maybe make this self.stage.modifiers? Would that make sense?
-                for modifier in self.curriculum.modifiers:
+                # Apply any modifiers to random lines in the batch, or sentence
+                # (Multiple modifiers can be applied to the same line!)
+                for modifier in modifiers:
                     batch = list(trace_map(lambda line: modifier(line.rstrip('\r\n')) + '\n', batch))
 
                 if self.shuffle:
