@@ -160,9 +160,9 @@ Augments the training data with sentences that are pure nonsensitcal noise. They
 ```yaml
 modifiers:
     - Noise: 0.01
-    min_word_legnth: 2 # Minumum lenght of each fake word, defaults is 2 if left blank
-    max_word_length: 5 # Maximum lenght of each fake word, defaults is 5 if left blank
-    max_words: 4       # Maximu number of fake words, default is 4 if left blank
+      min_word_legnth: 2 # Minumum lenght of each fake word, defaults is 2 if left blank
+      max_word_length: 5 # Maximum lenght of each fake word, defaults is 5 if left blank
+      max_words: 4       # Maximu number of fake words, default is 4 if left blank
 ```
 
 #### Tags
