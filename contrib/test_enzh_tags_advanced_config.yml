@@ -1,0 +1,35 @@
+# Datasets are already TSV files
+datasets:
+  clean: test-data/clean.enzh.10
+
+stages:
+  - start
+  - end
+
+modifiers: &modifiers
+  - UpperCase: 0.3
+
+start:
+  mix:
+    - clean 1
+    - until clean 1
+  modifiers:
+    - Tags: 0.5
+      custom_detok_src: null
+      custom_detok_trg: null
+      template: "{src} __target__ {trg} __done__"
+    - *modifiers
+
+end:
+  mix:
+    - clean 1
+    - until clean 1
+  modifiers:
+    - Tags: 0.5
+      custom_detok_src: null
+      custom_detok_trg: zh
+      template: "{src} __target__ {trg} __done__"
+    - *modifiers
+
+seed: 1111
+trainer: cat
