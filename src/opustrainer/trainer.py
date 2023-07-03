@@ -690,8 +690,10 @@ class StateTracker:
             return trainer.restore(self.loader.load(fh))
 
     def _dump(self, trainer:Trainer):
-        with open(self.path, 'w', encoding='utf-8') as fh:
-            return self.loader.dump(trainer.state(), fh)
+        new_statefile = f"{self.path}.new"
+        with open(new_statefile, 'w', encoding='utf-8') as fh:
+            self.loader.dump(trainer.state(), fh)
+        os.rename(new_statefile, self.path)
         self._last_dump = time.monotonic()
 
     def run(self, trainer:Trainer, *args, **kwargs):
