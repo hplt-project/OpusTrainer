@@ -10,13 +10,13 @@ def _getLevelNamesMapping() -> Dict[str,int]:
         return logging.getLevelNamesMapping()
     else:
         return {'CRITICAL': 50,
-                        'FATAL': 50,
-                        'ERROR': 40,
-                        'WARN': 30,
-                        'WARNING': 30,
-                        'INFO': 20,
-                        'DEBUG': 10,
-                        'NOTSET': 0}
+                'FATAL': 50,
+                'ERROR': 40,
+                'WARN': 30,
+                'WARNING': 30,
+                'INFO': 20,
+                'DEBUG': 10,
+                'NOTSET': 0}
 
 @lru_cache(None)
 def get_log_level(name: str) -> int:
