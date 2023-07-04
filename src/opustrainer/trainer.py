@@ -209,7 +209,7 @@ class DatasetReader:
                 # assert that the line is well formed, meaning non of the fields is the empty string
                 # If not, try to get a new line from the corpus
                 if any(field == '' for field in line.rstrip('\r\n').split('\t')):
-                    print(f"[Trainer] Empty field in {self.dataset.name} line:\"{line}\", skipping...")
+                    logger.log_once(f"[Trainer] Empty field in {self.dataset.name} line:\"{line}\", skipping...", loglevel="WARNING")
                     continue
 
                 return line
