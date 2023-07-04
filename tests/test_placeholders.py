@@ -93,4 +93,5 @@ class TestTagger(unittest.TestCase):
         logger.logging.shutdown()
         tmpfile.seek(0)
         warning = tmpfile.readline().decode('utf-8')
+        self.assertRegex(warning, r"WARNING")
         self.assertRegex(warning, r"Tags modifier should to be the last modifier to be applied")
