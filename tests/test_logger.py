@@ -18,6 +18,7 @@ class TestLogger(unittest.TestCase):
             # Check if the log is the same as the reference log. This is more complicated as we have a time field
             with open('contrib/test-data/test_enzh_config_plain_expected.log', 'r', encoding='utf-8') as reffile:
                 reference: List[str] = reffile.readlines()
+                # Loglist has one extra `\n` compared to reference list, due to stderr flushing an extra empty line?
                 loglist: List[str] = log.split('\n')
                 # Strip the time field and test
                 for i in range(len(reference)):
