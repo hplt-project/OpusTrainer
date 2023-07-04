@@ -1,10 +1,12 @@
 import random
 import unittest
+import tempfile
 
 from textwrap import dedent
 
 from opustrainer.modifiers.placeholders import PlaceholderTagModifier
 from opustrainer.trainer import CurriculumLoader
+from opustrainer import logger
 
 
 class TestTagger(unittest.TestCase):
@@ -77,13 +79,19 @@ class TestTagger(unittest.TestCase):
           self.assertEqual(test, ref)
 
   def test_warn_if_tag_modifier_is_not_last(self):
-    with self.assertWarnsRegex(UserWarning, r'Tags modifier should to be the last modifier to be applied'):
-      loader = CurriculumLoader()
-      loader.load(dedent("""
-        datasets: {}
-        stages: []
-        seed: 1
-        modifiers:
-          - Tags: 1.0
-          - UpperCase: 1.0
-      """))
+    with tempfile.NamedTemporaryFile(suffix='.log', prefix="placeholder") as tmpfile:
+        logger.setup_logger(outputfilename=tmpfile.name, disable_stderr=True)
+        loader = CurriculumLoader()
+        loader.load(dedent("""
+          datasets: {}
+          stages: []
+          seed: 1
+          modifiers:
+            - Tags: 1.0
+            - UpperCase: 1.0
+        """))
+        logger.logging.shutdown()
+        tmpfile.seek(0)
+        warning = tmpfile.readline().decode('utf-8')
+        self.assertRegex(warning, r"WARNING")
+        self.assertRegex(warning, r"Tags modifier should to be the last modifier to be applied")

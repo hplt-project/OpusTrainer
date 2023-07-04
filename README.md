@@ -20,26 +20,33 @@ pip install -e .
 
 ## Usage
 ```bash
-% ./trainer.py --help
-usage: trainer.py [-h] --config CONFIG [--temporary-directory TEMPORARY_DIR] [--state STATE_FILE] [--do-not-resume] [--sync] [trainer-command [arguments]]
+% opustrainer-train --help
+usage: opustrainer-train [-h] --config CONFIG [--state STATE] [--sync] [--temporary-directory TEMPORARY_DIRECTORY] [--do-not-resume] [--no-shuffle] [--log-level LOG_LEVEL] [--log-file LOG_FILE] ...
 
 Feeds marian tsv data for training.
+
+positional arguments:
+  trainer               Trainer program that gets fed the input. If empty it is read from config.
 
 options:
   -h, --help            show this help message and exit
   --config CONFIG, -c CONFIG
                         YML configuration input.
-  --temporary-directory TEMPORARY_DIR, -t TEMPORARY_DIR
+  --state STATE, -s STATE
+                        YML state file, defaults to ${CONFIG}.state.
+  --sync                Do not shuffle async
+  --temporary-directory TEMPORARY_DIRECTORY, -T TEMPORARY_DIRECTORY
                         Temporary dir, used for shuffling and tracking state
-  --state STATE_FILE    Path to trainer state file which stores how much of
-                        each dataset has been read. Defaults to ${CONFIG}.state
-  --sync                Do not shuffle in the background
   --do-not-resume, -d   Do not resume from the previous training state
   --no-shuffle, -n      Do not shuffle, for debugging
+  --log-level LOG_LEVEL
+                        Set log level. Available levels: DEBUG, INFO, WARNING, ERROR, CRITICAL. Default is INFO
+  --log-file LOG_FILE, -l LOG_FILE
+                        Target location for logging. Always logs to stderr and optionally to a file.
 ```
 Once you fix the paths in the configuration file, `train_config.yml` you can run a test case by doing:
 ```bash
-./trainer.py -c train_config.yml /path/to/marian -c marian_config --any --other --flags
+opustrainer-train -c train_config.yml /path/to/marian -c marian_config --any --other --flags
 ```
 You can check resulting mixed file in `/tmp/test`. If your neural network trainer doesn't support training from `stdin`, you can use this tool to generate a training dataset and then disable data reordering or shuffling at your trainer implementation, as your training input should be balanced.
 
