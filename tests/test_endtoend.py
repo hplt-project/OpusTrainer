@@ -66,8 +66,8 @@ class TestEndToEnd(unittest.TestCase):
             process = subprocess.run([sys.executable, '-m', 'opustrainer', '-c', 'contrib/test_enzh_config_plain.yml', '-d', '-l', tmpfile.name], stdout = subprocess.PIPE, stderr=subprocess.PIPE, encoding="utf-8")
             log = process.stderr
             # Check that the stderr output is the same the output written to the file
-            with open(tmpfile.name, 'r', encoding='utf-8') as logfile:
-                file_output: str = "".join(logfile.readlines())
+            tmpfile.seek(0)
+            file_output: str = "".join([line.decode('utf-8') for line in tmpfile.readlines()])
             self.assertEqual(log, file_output)
             # Check if the log is the same as the reference log. This is more complicated as we have a time field
             with open('contrib/test-data/test_enzh_config_plain_expected.log', 'r', encoding='utf-8') as reffile:

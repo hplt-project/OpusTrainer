@@ -1,11 +1,10 @@
 import random
 from operator import itemgetter
 from typing import Set, List, Tuple, Optional, Protocol, TypeVar, Iterable
-from warnings import warn
-
 from sacremoses import MosesDetokenizer
 
 from opustrainer.modifiers import Modifier
+from opustrainer import logger
 
 
 T = TypeVar('T')
@@ -342,4 +341,4 @@ class PlaceholderTagModifier(Modifier):
         inserted tags, which we don't want. So warn users about that if we notice it.
         """
         if context[-1] != self:
-            warn('Tags modifier should to be the last modifier to be applied, as otherwise other modifiers might alter the inserted tags themselves.')
+            logger.log('Tags modifier should to be the last modifier to be applied, as otherwise other modifiers might alter the inserted tags themselves.', loglevel="WARNING")

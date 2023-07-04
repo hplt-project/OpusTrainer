@@ -32,9 +32,13 @@ def setup_logger(outputfilename: str | None = None, loglevel: str = "INFO", disa
     # When testing the logger directly, we don't want to write to stderr, because in order to read
     # our stderr output, we have to use redirect_stderr, which however makes all other tests spit
     # as it interferes with unittest' own redirect_stderr. How nice.
+    # This happens even when assertLogs context capture is used.
     if not disable_stderr:
         handlers.append(logging.StreamHandler(stream=stderr))
     if outputfilename is not None:
         handlers.append(logging.FileHandler(filename=outputfilename))
-    logging.basicConfig(handlers=handlers, encoding='utf-8', level=getLogLevel(loglevel), format=loggingformat, datefmt='%Y-%m-%d %H:%M:%S')
-
+    # This is the only logger we'd ever use. However during testing, due to the context, logger can't be recreated,
+    # even if it has already been shutdown. This is why we use force=True to force recreation of logger so we can
+    # properly run our tests. Not the best solution, not sure if it's not prone to race conditions, but it is
+    # at the very least safe to use for the actual software running
+    logging.basicConfig(handlers=handlers, encoding='utf-8', level=getLogLevel(loglevel), format=loggingformat, datefmt='%Y-%m-%d %H:%M:%S', force=True)
