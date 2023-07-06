@@ -1,10 +1,10 @@
 import random
-from operator import attrgetter
+from operator import itemgetter
 from typing import Set, List, Tuple, Optional, Protocol, TypeVar, Iterable
-
 from sacremoses import MosesDetokenizer
 
 from opustrainer.modifiers import Modifier
+from opustrainer import logger
 
 
 T = TypeVar('T')
@@ -17,7 +17,6 @@ def random_weighted_choice(options:Iterable[Tuple[T,float]]) -> T:
         if choice < cumsum:
             return option
     raise RuntimeError('random_weighted_choice called with cumulative sum smaller than 1.0')
-
 
 
 def get_random_unicode_strings(min_length: int=2, max_length: int=10, max_words: int=3) -> List[str]:
@@ -269,27 +268,23 @@ class PlaceholderTagModifier(Modifier):
        ```yaml
        modifiers:
        - Tags: 0.02
-         num_tags: 6
          custom_detok_src: 'zh'
          custom_detok_trg: null
-         template: " <tag{n}> {token} </tag{n}>"
+         template: "__source__ {src} __target__ {trg} __done__"
          augment: 0.0 # 0% chance to just insert a random string on both sides
          replace: 0.0 # 0% change to use tags to force translate to a random string
         ```
     """
 
-    num_tags: int
     template: str
     src_detokenizer: Detokenizer
     trg_detokenizer: Detokenizer
     modes: List[Tuple[str,float]]
 
-    def __init__(self, probability: float=0.0, num_tags: int=6,
-        custom_detok_src: Optional[str]=None, custom_detok_trg: Optional[str]=None,
-        template: str="<tag{n}> {token} </tag{n}>", augment: float=0, replace:float=0):
+    def __init__(self, probability: float=0.0, custom_detok_src: Optional[str]=None, custom_detok_trg: Optional[str]=None,
+        template: str="__source__ {src} __target__ {trg} __done__", augment: float=0, replace:float=0):
         super().__init__(probability)
 
-        self.num_tags = num_tags
         self.template = template
 
         if custom_detok_src:
@@ -318,24 +313,24 @@ class PlaceholderTagModifier(Modifier):
     def __call__(self, line:str) -> str:
         """Applies tag to words in a line based on alignment info, and then removes the alignment info from the line.
            This is used to enable terminology support by tagging random words with their translation.
-           eg "I like cake" would become "I like <tag0> gusta </tag0> cake. By default the detokenizer used is the trivial
-           detokenizer, but we can instead have separate detokenizers on src and trg."
+           eg "I like cake" would become "I __source__ like __target__ gusta __done__ cake. 
+           By default the detokenizer used is the trivial detokenizer, but we can instead have separate detokenizers on src and trg."
         """
 
         src, trg, alignment = line.strip().split('\t')
         source = src.split(' ')
         target = trg.split(' ')
+        alignments = parse_alignments(alignment)
+
+        if max(s for s, _ in alignments) >= len(source):
+            raise ValueError('alignment pair source token index out of range')
+        if max(t for _, t in alignments) >= len(target):
+            raise ValueError('alignment pair target token index out of range')
 
         alignments: List[Pair] = parse_alignments(alignment)
 
         # Get replacement candidates
-        candidates = get_placeholding_candidates(alignments)
-
-        # Get list of possible tags.
-        tags: List[int] = list(range(self.num_tags))
-        # Shuffle the list. It's quite slow, but we only have 6 elements so it should be fine
-        # For more information https://stackoverflow.com/questions/10048069/what-is-the-most-pythonic-way-to-pop-a-random-element-from-a-list
-        random.shuffle(tags)
+        candidates: List[Tuple[int, int]] = get_placeholding_candidates(alignments)
 
         # Replace each of them with a THRESHOLD probability unless the two words are exactly the same
         # This is to avoid having numbers trained with placeholders or any other words that are exactly the same
@@ -357,7 +352,7 @@ class PlaceholderTagModifier(Modifier):
 
             if mode == "tag":
                 # Hint the expected output to the trainer by specifying it in the input as a tag
-                tag_tokens = self.template.format(n=tags.pop(), token=target[candidate.trg]).split(' ')
+                tag_tokens = self.template.format(src=source[candidate.src], trg=target[candidate.trg]).split(' ')
                 source = source[:candidate.src+1] + tag_tokens + source[candidate.src+1:] # Both +1 to insert tag_tokens after selected token
                 
                 # Fix up alignment pairs
@@ -371,15 +366,15 @@ class PlaceholderTagModifier(Modifier):
                 # and produce the target that we desire.
                 augment_tokens = get_random_unicode_strings()
                 tag_tokens = self.template.format(n=tags.pop(), token=' '.join(augment_tokens)).split(' ')
-                source = source[:candidate.src+1] + tag_tokens + source[candidate.src+1:] # Both +1 to insert tag after selected token
+                source = source[:candidate.src] + tag_tokens + source[candidate.src+1:]
                 target = target[:candidate.trg] + augment_tokens + target[candidate.trg+1:] # Only tail +1 to replace the selected target token
 
-                # Fix up alignment pairs
+                # Fix up alignment pairs with -1 because we replaced the original token
                 for pair in alignments:
                     if pair.src > candidate.src:
-                        pair.src += len(tag_tokens)
+                        pair.src += len(tag_tokens) - 1
                     if pair.trg > candidate.trg:
-                        pair.trg += len(augment_tokens) - 1 # -1 because we replaced the target token
+                        pair.trg += len(augment_tokens) - 1
 
                 # Add alignment pairs for the 1-to-N alignment pairs
                 index = alignments.index(candidate)
@@ -418,3 +413,10 @@ class PlaceholderTagModifier(Modifier):
 
         # Return the sentence, source tagged a la Dinu et al, target as it is and no alignment info
         return  source_detok + "\t" + target_detok + "\t" + format_alignments(alignments)
+
+    def validate(self, context:List[Modifier]) -> None:
+        """Current limitation of the tags modifier is that any other modifier might modify the
+        inserted tags, which we don't want. So warn users about that if we notice it.
+        """
+        if context[-1] != self:
+            logger.log('Tags modifier should to be the last modifier to be applied, as otherwise other modifiers might alter the inserted tags themselves.', loglevel="WARNING")

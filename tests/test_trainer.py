@@ -1,16 +1,18 @@
 #!/usr/bin/env python3
 '''Tests the available functionality'''
 import os
-import random
-import subprocess
 import tempfile
 import unittest
 
 from typing import IO, Type
 from collections import Counter
 from contextlib import closing
+from textwrap import dedent
+from io import StringIO
 
-from opustrainer.trainer import Dataset, DatasetReader, AsyncDatasetReader, CurriculumLoader, Trainer, StateTracker
+import yaml
+
+from opustrainer.trainer import Curriculum, CurriculumLoaderError, Dataset, DatasetReader, AsyncDatasetReader, CurriculumLoader, Trainer, StateTracker, Stage
 
 TEST_FILE: str
 
@@ -176,3 +178,183 @@ class TestTrainer(unittest.TestCase):
 				batches.extend(state_tracker.run(trainer2))
 			
 		self.assertEqual(batches, batches_ref)
+
+
+class TestCurriculumLoader(unittest.TestCase):
+	def test_simple(self):
+		"""Test loading of a minimal configuration"""
+		config = {
+			'datasets': {
+				'clean': 'contrib/test-data/clean',
+			},
+			'stages': [
+				'start'
+			],
+			'start': [
+				'clean 1.0',
+				'until clean 5'
+			],
+			'seed': 1111,
+			'modifiers': [
+				{'UpperCase': 1.0}
+			]
+		}
+		curriculum = CurriculumLoader().load(config)
+		self.assertIsInstance(curriculum, Curriculum)
+		self.assertEqual(curriculum.datasets, {
+			'clean': Dataset(name='clean', files=['./contrib/test-data/clean'])
+		})
+		self.assertEqual(curriculum.stages, {
+			'start': Stage(
+				name='start',
+				datasets=[
+					(Dataset('clean', ['./contrib/test-data/clean']), 1.0)
+				],
+				until_dataset='clean',
+				until_epoch=5,
+				modifiers=None)
+		})
+		self.assertEqual(curriculum.seed, 1111)
+		self.assertEqual(len(curriculum.modifiers), 1)
+
+	def test_no_until(self):
+		"""Test that omitting the until clause raises an error"""
+		config = {
+			'datasets': {
+				'clean': 'contrib/test-data/clean',
+			},
+			'stages': [
+				'start'
+			],
+			'start': [
+				'clean 1.0'
+			],
+			'seed': 1
+		}
+		with self.assertRaisesRegex(CurriculumLoaderError, 'until clause'):
+			CurriculumLoader().load(config)
+	
+	def test_undefined_dataset(self):
+		"""Test that mentioning a wrong dataset raises an error"""
+		config = {
+			'datasets': {
+				'clean': 'contrib/test-data/clean',
+			},
+			'stages': [
+				'start'
+			],
+			'start': [
+				'cleany 1.0',
+				'until cleany 1'
+			],
+			'seed': 1
+		}
+		with self.assertRaisesRegex(CurriculumLoaderError, 'unknown dataset'):
+			CurriculumLoader().load(config)
+
+	def test_undefined_modifier(self):
+		"""Test that mentioning an unknown modifier raises an error"""
+		config = {
+			'datasets': {
+				'clean': 'contrib/test-data/clean',
+			},
+			'stages': [
+				'start'
+			],
+			'start': [
+				'clean 1.0',
+				'until clean 1'
+			],
+			'modifiers': [
+				{'NonExistingModifier': 1.0}
+			],
+			'seed': 1
+		}
+		with self.assertRaisesRegex(CurriculumLoaderError, 'unknown modifier'):
+			CurriculumLoader().load(config)
+
+	def test_extended_stage_configuration(self):
+		"""Test the extended stage configuration"""
+		config = {
+			'datasets': {
+				'clean': 'contrib/test-data/clean',
+			},
+			'stages': [
+				'start'
+			],
+			'start': {
+				'mix': [
+					'clean 1.0',
+					'until clean 1'
+				],
+				'modifiers': [
+					{'UpperCase': 1.0}
+				],
+			},
+			'seed': 1
+		}
+		curriculum = CurriculumLoader().load(config)
+		self.assertEqual(len(curriculum.stages['start'].datasets), 1)
+		self.assertEqual(curriculum.stages['start'].until_dataset, 'clean')
+		self.assertTrue(curriculum.stages['start'].modifiers is not None and len(curriculum.stages['start'].modifiers) == 1)
+
+	def test_combined_stage_configuration(self):
+		"""Test that in the extended stage configuration modifier lists are
+		flattened which allows us to use YAML references more easily."""
+
+		# Writing this in YAML directly to reflect how this is intended to be useful
+		config_yaml = dedent("""
+			datasets:
+				clean: contrib/test-data/clean
+
+			stages:
+			- start
+
+			modifiers: &global_modifiers
+			- TitleCase: 0.5
+			
+			start:
+				mix: 
+				- clean 1.0
+				- until clean 1
+				modifiers:
+				- UpperCase: 0.5
+				- *global_modifiers
+			
+			seed: 1
+		""").replace("\t", "  ")
+
+		config = yaml.safe_load(StringIO(config_yaml))
+
+		curriculum = CurriculumLoader().load(config)
+		self.assertEqual([modifier.__class__.__name__ for modifier in curriculum.stages['start'].modifiers or []], ['UpperCaseModifier', 'TitleCaseModifier'])
+
+	def test_modifier_error_line_context(self):
+		"""Test that when a modifier fails, we get context information about the line that failed"""
+		with tempfile.NamedTemporaryFile('w', encoding='utf-8') as fd:
+			fd.write('This is a test\tDas ist ein Test\t0-0 1-1 2-2 3-3\n')
+			fd.write('Hello world\tHallo Welt\t0-0 1-2\n') # 2 is out-of-bounds
+			fd.flush()
+
+			config = {
+				'datasets': {
+					'clean': fd.name,
+				},
+				'stages': [
+					'start'
+				],
+				'start': [
+					'clean 1.0',
+					'until clean 1'
+				],
+				'modifiers': [
+					{'Tags': 1.0}
+				],
+				'seed': 1
+			}
+			curriculum = CurriculumLoader().load(config)
+
+			trainer = Trainer(curriculum)
+			
+			with self.assertRaisesRegex(Exception, "Exception while processing item 1:"):
+				list(trainer.run(batch_size=2))

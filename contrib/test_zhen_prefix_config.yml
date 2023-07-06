@@ -1,0 +1,23 @@
+# Datasets are already TSV files
+datasets:
+  clean: test-data/clean.enzh.10
+
+stages:
+  - start
+
+start:
+  - clean  1
+  - until clean 1
+
+modifiers:
+  - UpperCase: 0.2
+  - TitleCase: 0.2
+  - Typos: 0.2
+  - Prefix: 0.5 # Prefix must always be used after "Tags", but ideally never used together with "Tags"
+    min_words: 2
+    max_words: 5
+    #template: "__start__ {trg} __end__ " # # We STRONGLY DISCOURAGE the modification of this line and in fact it shouldn't be included in the config
+    # unless you really know what you are doing.
+
+seed: 1111
+trainer: cat

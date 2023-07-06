@@ -14,7 +14,7 @@ import time
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from enum import Enum
-from typing import List, Tuple, Dict, Set, Any, Optional, Union, Type, TextIO, cast, Iterable, Literal
+from typing import List, Tuple, Dict, Set, Any, Optional, Union, Type, TextIO, cast, Iterable, Literal, Iterable, Callable, TypeVar
 from tempfile import TemporaryFile
 from itertools import islice
 from functools import partial
@@ -22,8 +22,11 @@ from functools import partial
 import yaml
 
 from opustrainer.modifiers import Modifier
+from opustrainer.modifiers.prefix import PrefixModifier
 from opustrainer.modifiers.surface import UpperCaseModifier, TitleCaseModifier
 from opustrainer.modifiers.placeholders import PlaceholderTagModifier
+from opustrainer.modifiers.typos import TypoModifier
+from opustrainer import logger
 
 def ignore_sigint():
     """Used as pre-exec hook for the trainer program as to ignore ctrl-c. We'll
@@ -43,6 +46,8 @@ MODIFIERS = {
     'UpperCase': UpperCaseModifier,
     'TitleCase': TitleCaseModifier,
     'Tags': PlaceholderTagModifier,
+    'Typos': TypoModifier,
+    'Prefix': PrefixModifier
 }
 
 @dataclass(frozen=True)
@@ -64,6 +69,7 @@ class Stage:
     datasets: List[Tuple[Dataset, float]]
     until_dataset: str
     until_epoch: Optional[int]
+    modifiers: Optional[List[Modifier]]
 
 
 @dataclass(frozen=True)
@@ -110,12 +116,13 @@ class DatasetReader:
     seed: int
     line: int
     epoch: int
+    shuffle: bool
 
     tmpdir: Optional[str]
 
     _fh: Optional[TextIO] = None
 
-    def __init__(self, dataset:Dataset, seed:int, tmpdir:Optional[str]=None):
+    def __init__(self, dataset:Dataset, seed:int, tmpdir:Optional[str]=None, shuffle:bool=True):
         """
         Parameters
         ----------
@@ -125,12 +132,15 @@ class DatasetReader:
             Seed number for the random number generator that shuffles the data internally
         tmpdir : str, optional
             Path to directory in which the temporary shuffled dataset is written (default is `tempfile.gettempdir()`)
+        shuffle : bool
+            Indicates whether shuffling should happen. Enabled by default.
         """
         self.dataset = dataset
         self.seed = seed
         self.tmpdir = tmpdir
         self.epoch = 0
         self.line = 0
+        self.shuffle = shuffle
 
     def state(self) -> DatasetState:
         return DatasetState(self.seed, self.line, self.epoch)
@@ -152,7 +162,7 @@ class DatasetReader:
             self._fh.close()
 
     def _open(self):
-        print(f"[Trainer] Reading {self.dataset.name} for epoch {self.epoch}")
+        logger.log(f"Reading {self.dataset.name} for epoch {self.epoch}")
         # Open temporary file which will contain shuffled version of `cat self.files`
         fh = TemporaryFile(mode='w+', encoding='utf-8', dir=self.tmpdir)
 
@@ -163,6 +173,7 @@ class DatasetReader:
         # sure if that has any performance or stability benefits/drawbacks.
         subprocess.check_call([sys.executable, PATH_TO_SHUFFLE,
             *(['--temporary-directory', self.tmpdir] if self.tmpdir else []),
+            *([] if self.shuffle else ['--no-shuffle']),
             str(self.seed),
             f'/dev/fd/{fh.fileno()}',
             *self.dataset.files
@@ -189,11 +200,19 @@ class DatasetReader:
         assert self._fh is not None
         try:
             # Try to read the next line from our shuffled file
-            line = self._fh.readline()
-            if line == '':
-                raise StopIteration
-            self.line += 1
-            return line
+            while True:
+                line = self._fh.readline()
+                if line == '':
+                    raise StopIteration
+                self.line += 1
+
+                # assert that the line is well formed, meaning non of the fields is the empty string
+                # If not, try to get a new line from the corpus
+                if any(field == '' for field in line.rstrip('\r\n').split('\t')):
+                    logger.log_once(f"[Trainer] Empty field in {self.dataset.name} line:\"{line}\", skipping...", loglevel="WARNING")
+                    continue
+
+                return line
         except StopIteration:
             if just_opened:
                 raise RuntimeError('reading from empty shuffled file')
@@ -230,6 +249,7 @@ class AsyncDatasetReader(DatasetReader):
             file=cast(TextIO, fh),
             proc=subprocess.Popen([sys.executable, PATH_TO_SHUFFLE,
                 *(['--temporary-directory', self.tmpdir] if self.tmpdir else []),
+                *([] if self.shuffle else ['--no-shuffle']),
                 str(seed),
                 f'/dev/fd/{fh.fileno()}',
                 *self.dataset.files
@@ -246,7 +266,7 @@ class AsyncDatasetReader(DatasetReader):
         self._pending = None
 
     def _open(self):
-        print(f"[Trainer] Reading {self.dataset.name} for epoch {self.epoch}")
+        logger.log(f"Reading {self.dataset.name} for epoch {self.epoch}")
 
         # First time self._pending is None, but all subsequent calls to _open
         # should have self._pending be set.
@@ -317,6 +337,21 @@ class StateLoader:
         }, fh, allow_unicode=True, sort_keys=False) #TODO: is safe_dump not sufficient?
 
 
+class CurriculumLoaderError(ValueError):
+    """Exception raised when the yaml data contains an invalid curriculum"""
+    pass
+
+
+def flatten(iterable):
+    """Iterates recursively (depth-first) trough all items in a list with
+    possibly nested lists"""
+    for item in iterable:
+        if isinstance(item, list):
+            yield from flatten(item)
+        else:
+            yield item
+
+
 class CurriculumV1Loader:
     def load(self, ymldata:dict, *, basepath:str='./') -> Curriculum:
         datasets = self._load_datasets(ymldata, basepath)
@@ -359,6 +394,16 @@ class CurriculumV1Loader:
           - dataset2 frac
           - until dataset3 epochs
         ```
+        or the more verbose version
+        ```yaml
+        stagename:
+          mix:
+            - dataset1 frac
+            - dataset2 frac
+            - until dataset3 epochs
+          modifiers:
+            - Modifier: freq
+        ```
         """
         return {
             stage_name: self._load_stage(ymldata, stage_name, datasets, int(ymldata['seed']))
@@ -368,19 +413,43 @@ class CurriculumV1Loader:
     def _load_stage(self, ymldata:dict, stage_name:str, available_datasets:Dict[str,Dataset], seed:int) -> Stage:
         datasets: List[Tuple[Dataset, float]] = []
 
-        for line in ymldata[stage_name][:-1]:
-            dataset_name, weight = line.split()
-            datasets.append((available_datasets[dataset_name], float(weight)))
+        if isinstance(ymldata[stage_name], list):
+            mix = ymldata[stage_name]
+        else:
+            mix = ymldata[stage_name].get('mix', [])
 
-        _, until_dataset_name, max_epochs = ymldata[stage_name][-1].split()
-        assert until_dataset_name in available_datasets, f"until clause of stage '{stage_name}' refers to unknown dataset '{until_dataset_name}'"
-        assert until_dataset_name in {dataset.name for dataset, weight in datasets if weight > 0.0}, f"until clause of stage '{stage_name}' watches dataset '{until_dataset_name}' but that dataset is not read during this stage"
-        return Stage(
-            name=stage_name,
-            datasets=datasets,
-            until_dataset=until_dataset_name,
-            until_epoch=int(max_epochs) if max_epochs != 'inf' else None
-        )
+        if len(mix) == 0:
+            raise CurriculumLoaderError(f"the dataset mix of stage '{stage_name}' is empty or missing its until clause")
+        if not mix[-1].startswith('until '):
+            raise CurriculumLoaderError(f"the last entry in {stage_name}'s dataset mix is not the until clause")
+
+        for line in mix[:-1]:
+            dataset_name, weight = line.split()
+            try:
+                datasets.append((available_datasets[dataset_name], float(weight)))
+            except KeyError:
+                raise CurriculumLoaderError(f"stage '{stage_name}' mentions unknown dataset '{dataset_name}'")
+            except ValueError:
+                raise CurriculumLoaderError(f"could not convert the weight '{weight}' of stage '{stage_name}' dataset '{dataset_name}' to float")
+
+        try:
+            _, until_dataset_name, max_epochs = mix[-1].split()
+            until_epoch = int(max_epochs) if max_epochs != 'inf' else None
+        except ValueError:
+            raise CurriculumLoaderError(f"could not parse last line as `until <dataset_name> <number|'inf'>`: {mix[-1]}")
+        if until_dataset_name not in {dataset.name for dataset, weight in datasets if weight > 0.0}:
+            raise CurriculumLoaderError(f"until clause of stage '{stage_name}' watches dataset '{until_dataset_name}' but that dataset is not read during this stage")
+
+        try:
+            return Stage(
+                name=stage_name,
+                datasets=datasets,
+                until_dataset=until_dataset_name,
+                until_epoch=until_epoch,
+                modifiers=self._load_modifiers(ymldata[stage_name]) if isinstance(ymldata[stage_name], dict) and 'modifiers' in ymldata[stage_name] else None
+            )
+        except Exception as exc:
+            raise CurriculumLoaderError(f"could not complete the parse of stage '{stage_name}': {exc!s}") from exc
 
     def _load_modifiers(self, ymldata:dict) -> List[Modifier]:
         """Reads
@@ -394,21 +463,30 @@ class CurriculumV1Loader:
             custom_detok_trg: zh
         ```
         """
-        return [
+        modifiers = [
             self._load_modifier(modifier_entry)
-            for modifier_entry in ymldata.get('modifiers', [])
+            for modifier_entry in flatten(ymldata.get('modifiers', []))
         ]
 
+        for modifier in modifiers:
+            modifier.validate(modifiers)
+
+        return modifiers
+
     def _load_modifier(self, modifier_entry: Dict[str, Any]) -> Modifier:
-        settings: Dict[str, Any] = {}
-        name: str = ""
-        for i, (key, value) in enumerate(modifier_entry.items()):
-            if i == 0:
-                name = key # The probability of the modifier is attached to
-                settings['probability'] = value
-            else:
-                settings[key] = value
-        return MODIFIERS[name](**settings)
+        (name, probability), *config_pairs = modifier_entry.items()
+        settings = {
+            **dict(config_pairs),
+            'probability': float(probability)
+        }
+        try:
+            modifier = MODIFIERS[name]
+        except KeyError:
+            raise CurriculumLoaderError(f"unknown modifier '{name}'")
+        try:
+            return modifier(**settings)
+        except Exception as exc:
+            raise CurriculumLoaderError(f"could not initialize modifier '{name}': {exc!s}") from exc
 
 
 class CurriculumLoader:
@@ -457,6 +535,18 @@ class EpochTracker:
         return EpochTrackerState(self.epoch_offset, self.line_offset)
 
 
+In = TypeVar('In')
+
+Out = TypeVar('Out')
+
+def trace_map(fn: Callable[[In], Out], items: Iterable[In]) -> Iterable[Out]:
+    for n, item in enumerate(items):
+        try:
+            yield fn(item)
+        except Exception as exc:
+            raise Exception(f'Exception while processing item {n}: {item!r}') from exc
+
+
 class Trainer:
     """Writes lines to a trainer program according to the curriculum."""
     curriculum: Curriculum
@@ -466,13 +556,16 @@ class Trainer:
 
     # Path to write temporary shuffled files to
     tmpdir:Optional[str]
+    # For debugging purposes, whether to shuffle or not
+    shuffle:bool
 
     # Reader class to use (I.e. DatasetReader or AsyncDatasetReader)
     _reader_impl: Type[DatasetReader]
 
-    def __init__(self, curriculum:Curriculum, *, reader:Type[DatasetReader] = DatasetReader, tmpdir:Optional[str]=None):
+    def __init__(self, curriculum:Curriculum, *, reader:Type[DatasetReader] = DatasetReader, tmpdir:Optional[str]=None, shuffle:bool=True):
         self.curriculum = curriculum
         self.tmpdir = tmpdir
+        self.shuffle = shuffle
         self._reader_impl = reader
         random.seed(self.curriculum.seed)
         first_stage_name = self.curriculum.stages_order[0]
@@ -493,7 +586,7 @@ class Trainer:
         random.setstate(state.random_state)
         self.stage = self.curriculum.stages[state.stage]
         self.readers = {
-            dataset.name: self._reader_impl(dataset, self.curriculum.seed, tmpdir=self.tmpdir).restore(state.datasets[dataset.name])
+            dataset.name: self._reader_impl(dataset, self.curriculum.seed, tmpdir=self.tmpdir, shuffle=self.shuffle).restore(state.datasets[dataset.name])
             for dataset in self.curriculum.datasets.values()
         }
         self.epoch_tracker = EpochTracker(self.readers[self.stage.until_dataset]).restore(state.epoch_tracker_state)
@@ -516,15 +609,23 @@ class Trainer:
 
     def next_stage(self) -> Optional[Stage]:
         """Move to the next stage. Will return this next stage or None if there is no next stage."""
+        if self.stage is None:
+            return None
+
         self.stage = self.curriculum.next_stage(self.stage)
+
+        # If there is a next stage, also reset the epoch tracker to track the
+        # `until` clause of that new stage.
+        # TODO: when self.stage is None, should we delete the EpochTracker?
         if self.stage is not None:
             self.epoch_tracker = EpochTracker(self.readers[self.stage.until_dataset])
+
         return self.stage
 
     def run(self, *, batch_size:int=100) -> Iterable[List[str]]:
         """Yield batches, moving through the stages of training as datasets are consumed."""
         while self.stage is not None:
-            print(f"[Trainer] Starting stage {self.stage.name}")
+            logger.log(f"Starting stage {self.stage.name}")
             while self.stage.until_epoch is None or self.epoch_tracker.epoch < self.stage.until_epoch:
                 batch: List[str] = []
 
@@ -533,13 +634,20 @@ class Trainer:
                 for dataset, weight in self.stage.datasets:
                     batch.extend(islice(self.readers[dataset.name], 0, int(batch_size * weight)))
 
-                # Apply any modifiers to random lines in the batch, or sentence
-                # (Multiple modifiers could be applied to the same line!)
-                # TODO: maybe make this self.stage.modifiers? Would that make sense?
-                for modifier in self.curriculum.modifiers:
-                    batch = [modifier(line.rstrip('\n')) + '\n' for line in batch]
+                # Stage level modifiers take precedence over global modifiers,
+                # but you can combine them yourself using YAML references.
+                if self.stage.modifiers is not None:
+                    modifiers = self.stage.modifiers
+                else:
+                    modifiers = self.curriculum.modifiers
 
-                random.shuffle(batch)
+                # Apply any modifiers to random lines in the batch, or sentence
+                # (Multiple modifiers can be applied to the same line!)
+                for modifier in modifiers:
+                    batch = list(trace_map(lambda line: modifier(line.rstrip('\r\n')) + '\n', batch))
+
+                if self.shuffle:
+                    random.shuffle(batch)
 
                 # Tell anyone whose listening that something interesting happened
                 # TODO: Yield something useful, e.g. progress.
@@ -583,8 +691,10 @@ class StateTracker:
             return trainer.restore(self.loader.load(fh))
 
     def _dump(self, trainer:Trainer):
-        with open(self.path, 'w', encoding='utf-8') as fh:
-            return self.loader.dump(trainer.state(), fh)
+        new_statefile = f"{self.path}.new"
+        with open(new_statefile, 'w', encoding='utf-8') as fh:
+            self.loader.dump(trainer.state(), fh)
+        os.rename(new_statefile, self.path)
         self._last_dump = time.monotonic()
 
     def run(self, trainer:Trainer, *args, **kwargs):
@@ -604,10 +714,10 @@ class StateTracker:
                 self._dump(trainer)
 
 
-def print_state(state:TrainerState, file:TextIO=sys.stdout) -> None:
-    print(f"[Trainer] At stage {state.stage}", file=file)
+def print_state(state:TrainerState) -> None:
+    logger.log(f"At stage {state.stage}")
     for name, reader in state.datasets.items():
-        print(f"[Trainer] Dataset {name}: overall epochs {reader.epoch: 3d}.{reader.line:010d}", file=file)
+        logger.log(f"Dataset {name}: overall epochs {reader.epoch: 3d}.{reader.line:010d}")
 
 
 def main() -> None:
@@ -617,9 +727,13 @@ def main() -> None:
     parser.add_argument("--sync", action="store_true", help="Do not shuffle async")
     parser.add_argument("--temporary-directory", '-T', default=None, type=str, help='Temporary dir, used for shuffling and tracking state')
     parser.add_argument("--do-not-resume", '-d', action="store_true", help='Do not resume from the previous training state')
+    parser.add_argument("--no-shuffle", '-n', action="store_false", help='Do not shuffle, for debugging', dest="shuffle")
+    parser.add_argument("--log-level", type=str, default="INFO", help="Set log level. Available levels: DEBUG, INFO, WARNING, ERROR, CRITICAL. Default is INFO")
+    parser.add_argument("--log-file", '-l', type=str, default=None, help="Target location for logging. Always logs to stderr and optionally to a file.")
     parser.add_argument("trainer", type=str, nargs=argparse.REMAINDER, help="Trainer program that gets fed the input. If empty it is read from config.")
 
     args = parser.parse_args()
+    logger.setup_logger(args.log_file, args.log_level)
 
     with open(args.config, 'r', encoding='utf-8') as fh:
         config = yaml.safe_load(fh)
@@ -632,12 +746,12 @@ def main() -> None:
         if missing_files:
             raise ValueError(f"Dataset '{dataset.name}' is missing files: {missing_files}")
 
-    trainer = Trainer(curriculum, reader=DatasetReader if args.sync else AsyncDatasetReader, tmpdir=args.temporary_directory)
+    trainer = Trainer(curriculum, reader=DatasetReader if args.sync else AsyncDatasetReader, tmpdir=args.temporary_directory, shuffle=args.shuffle)
 
     state_tracker = StateTracker(args.state or f'{args.config}.state', restore=not args.do_not_resume)
 
     # Make trainer listen to `kill -SIGUSR1 $PID` to print dataset progress
-    signal.signal(signal.SIGUSR1, lambda signum, handler: print_state(trainer.state(), sys.stderr))
+    signal.signal(signal.SIGUSR1, lambda signum, handler: print_state(trainer.state()))
 
     model_trainer = subprocess.Popen(
         args.trainer or config['trainer'],
@@ -660,7 +774,7 @@ def main() -> None:
             for batch in state_tracker.run(trainer):
                 model_trainer.stdin.writelines(batch)
         except KeyboardInterrupt:
-            print("[Trainer] Ctrl-c pressed, stopping training")
+            logger.log("Ctrl-c pressed, stopping training")
 
         # Levels of waiting for the trainer. This is reached either because we ran out of batches
         # or because ctrl-c was pressed. Pressing ctrl-c more advances to next level of aggressiveness.
@@ -672,8 +786,8 @@ def main() -> None:
                     model_trainer.terminate()
                 else:
                     model_trainer.kill()
-
-                print(f"[Trainer] waiting for trainer to {stage}. Press ctrl-c to be more aggressive")
+                
+                logger.log(f"waiting for trainer to {stage}. Press ctrl-c to be more aggressive")
                 sys.exit(model_trainer.wait()) # blocking
             except KeyboardInterrupt:
                 continue
@@ -681,7 +795,7 @@ def main() -> None:
         # BrokenPipeError is thrown by writelines() or close() and indicates that the child trainer
         # process is no more. We can safely retrieve its return code and exit with that, it should
         # not block at this point.
-        print("[Trainer] trainer stopped reading input")
+        logger.log("trainer stopped reading input")
         sys.exit(model_trainer.wait())
 
 

@@ -31,11 +31,15 @@ modifiers:
   - UpperCase: 0.05
   - TitleCase: 0.05
   #- Tags: 0.08 # Requires dataset augmented with alignment info
-  #  num_tags: 6
   #  custom_detok_src: null # Null value for the src detokenizer
   #  custom_detok_trg: zh
-  # template: " <tag{n}> {token} </tag{n}>" # This is the default way of inserting tags.
+  # template: "__source__ {src} __target__ {trg} __done__" # This is the default way of inserting tags.
     # We STRONGLY DISCOURAGE the modification of this line and in fact it shouldn't be included in the config
+    # unless you really know what you are doing.
+  # - Prefix: 0.05 #
+  #  min_words: 2
+  #  max_words: 5
+    #template: "__start__ {trg} __end__ " # # We STRONGLY DISCOURAGE the modification of this line and in fact it shouldn't be included in the config
     # unless you really know what you are doing.
 
 seed: 1111
