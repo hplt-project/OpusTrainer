@@ -1,6 +1,6 @@
 import random
-from operator import itemgetter
-from typing import Set, List, Tuple, Optional, Protocol, TypeVar, Iterable
+from operator import attrgetter
+from typing import Set, List, Tuple, Optional, Protocol, TypeVar, Iterable, NamedTuple
 from sacremoses import MosesDetokenizer
 
 from opustrainer.modifiers import Modifier
@@ -17,6 +17,14 @@ def random_weighted_choice(options:Iterable[Tuple[T,float]]) -> T:
         if choice < cumsum:
             return option
     raise RuntimeError('random_weighted_choice called with cumulative sum smaller than 1.0')
+
+
+def first(iterable:Iterable[T]) -> T:
+    """Returns the first value of an iterable. Might raise a ValueError"""
+    try:
+        return next(iter(iterable))
+    except StopIteration:
+        raise ValueError('iterable is empty')
 
 
 def get_random_unicode_strings(min_length: int=2, max_length: int=10, max_words: int=3) -> List[str]:
@@ -165,23 +173,10 @@ def get_random_unicode_strings(min_length: int=2, max_length: int=10, max_words:
     ]
 
 
-class Pair:
-    """Alignment pair. Tuple, but mutable so we can fix them up when we add words."""
+class Pair(NamedTuple):
+    """Alignment pair"""
     src: int
     trg: int
-
-    __slots__ = ('src', 'trg')
-
-    def __init__(self, src:int, trg:int):
-        self.src = src
-        self.trg = trg
-
-    def __hash__(self):
-        """Risky for mutable types, but we need it for set operations"""
-        return hash((self.src, self.trg))
-
-    def __eq__(self, other):
-        return self.src == other.src and self.trg == other.trg
 
     def __repr__(self):
         return f'{self.src}-{self.trg}'
@@ -346,43 +341,57 @@ class PlaceholderTagModifier(Modifier):
             # Select mode (skip random_weighted_choices*() when 'tag' is the only mode)
             mode = random_weighted_choice(self.modes) if len(self.modes) > 1 else 'tag'
 
-            # If we'd need a tag but we ran out of them, skip.
-            if (mode == "tag" or mode == "replace") and not tags:
-                continue
-
             if mode == "tag":
                 # Hint the expected output to the trainer by specifying it in the input as a tag
                 tag_tokens = self.template.format(src=source[candidate.src], trg=target[candidate.trg]).split(' ')
-                source = source[:candidate.src+1] + tag_tokens + source[candidate.src+1:] # Both +1 to insert tag_tokens after selected token
+                source = source[:candidate.src] + tag_tokens + source[candidate.src+1:]
                 
+                # __src__ aaa __trg__ bbb __done__ => bbb
+                # ^1      ^2  ^3      ^4  ^5          ^1
+                # So what is the correct alignment pairs for these? For now
+                # I map 1-1 2-1 3-1 4-1 5-1
+                # TODO: Why is this different from when `mode == replace`
+
                 # Fix up alignment pairs
-                for pair in alignments:
-                    if pair.src > candidate.src:
-                        pair.src += len(tag_tokens)
-            
+                index = alignments.index(candidate)
+                alignments = (
+                    # pairs before the replaced bit stay the same
+                    alignments[:index]
+                    # fill in the gap created by the replaced bit
+                    + [Pair(candidate.src + n, candidate.trg) for n in range(len(tag_tokens))]
+                    # pairs after the replaced bit have to be offset by the length of the replacement bit
+                    + [Pair(candidate.src + len(tag_tokens), candidate.trg) for pair in alignments[index+1:]]
+                )
+
             elif mode == "replace":
                 # Same as above, but instead of the expected target word, we replace it on both
                 # sides with a random string. This encourages the model to really ignore the source
                 # and produce the target that we desire.
                 augment_tokens = get_random_unicode_strings()
-                tag_tokens = self.template.format(n=tags.pop(), token=' '.join(augment_tokens)).split(' ')
+                tag_tokens = self.template.format(src=source[candidate.src], trg=' '.join(augment_tokens)).split(' ')
                 source = source[:candidate.src] + tag_tokens + source[candidate.src+1:]
-                target = target[:candidate.trg] + augment_tokens + target[candidate.trg+1:] # Only tail +1 to replace the selected target token
+                target = target[:candidate.trg] + augment_tokens + target[candidate.trg+1:]
 
-                # Fix up alignment pairs with -1 because we replaced the original token
-                for pair in alignments:
-                    if pair.src > candidate.src:
-                        pair.src += len(tag_tokens) - 1
-                    if pair.trg > candidate.trg:
-                        pair.trg += len(augment_tokens) - 1
+                src_tag_offset = first(n for n, tpl in enumerate(self.template.split(' ')) if '{src}' in tpl)
+                trg_tag_offset = first(n for n, tpl in enumerate(self.template.split(' ')) if '{trg}' in tpl)
 
-                # Add alignment pairs for the 1-to-N alignment pairs
+                # __src__ aaa __trg__ xxx yyy zzz __done__ => xxx yyy zzz
+                # ^1      ^2  ^3      ^4  ^5  ^6  ^7          ^1  ^2  ^3
+                # So what is the correct alignment pairs for these? For now
+                # I map 2-1 2-2 2-3 + 4-1 5-2 6-3?
+
+                # Fix up alignment pairs
                 index = alignments.index(candidate)
-                augment_pairs = [
-                    Pair(candidate.src, candidate.trg + i)
-                    for i in range(0, len(augment_tokens))
-                ]
-                alignments = alignments[:index] + augment_pairs + alignments[index+1:] # +1 to replace the original pair
+                alignments = (
+                    # pairs before the replaced bit stay the same
+                    alignments[:index]
+                    # fill in the gap created by the replaced bit: the 2-1 2-2 2-3 bit
+                    + [Pair(candidate.src + src_tag_offset, candidate.trg + n) for n in range(len(augment_tokens))]
+                    # fill in the gap created by the replaced bit: the 4-1 5-2 6-3 bit
+                    + [Pair(candidate.src + trg_tag_offset + n, candidate.trg + n) for n in range(len(augment_tokens))]
+                    # pairs after the replaced bit have to be offset by the length of the replacement bit
+                    + [Pair(candidate.src + len(tag_tokens), candidate.trg) for pair in alignments[index+1:]]
+                )
 
             elif mode == "augment":
                 # Augment mode adds random noise both on the source and the target without any
@@ -391,22 +400,20 @@ class PlaceholderTagModifier(Modifier):
                 source = source[:candidate.src+1] + augment_tokens + source[candidate.src+1:]
                 target = target[:candidate.trg+1] + augment_tokens + target[candidate.trg+1:]
 
-                # Fix up alignments for both source and target sides
-                for pair in alignments:
-                    if pair.src > candidate.src:
-                        pair.src += len(augment_tokens)
-                    if pair.trg > candidate.trg:
-                        pair.trg += len(augment_tokens)
-
-                # Also insert alignments for the augmented string
-                augment_pairs = [
-                    Pair(candidate.src + i, candidate.trg + i)
-                    for i in range(1, 1 + len(augment_tokens))
-                ]
-                
-                # Insert them after the alignment pair we used to select this place.
+                # Fix up alignment pairs
                 index = alignments.index(candidate)
-                alignments = alignments[:index+1] + augment_pairs + alignments[index+1:]
+                alignments = (
+                    # pairs before the replaced bit stay the same
+                    alignments[:index]
+                    # fill in the gap created by the added random noise
+                    + [Pair(candidate.src + n, candidate.trg + n) for n in range(len(augment_tokens))]
+                    # pairs after the replaced bit have to be offset by the length of the replacement bit
+                    + [Pair(candidate.src + len(augment_tokens), candidate.trg + len(augment_tokens)) for pair in alignments[index+1:]]
+                )
+
+            #TODO No further replacements are currently supported because `alignments` is now all
+            # messed up and doesn't match `candidates` any more.
+            break
 
         source_detok = self.src_detokenizer.detokenize(source)
         target_detok = self.trg_detokenizer.detokenize(target)
