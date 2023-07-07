@@ -20,11 +20,8 @@ def random_weighted_choice(options:Iterable[Tuple[T,float]]) -> T:
 
 
 def first(iterable:Iterable[T]) -> T:
-    """Returns the first value of an iterable. Might raise a ValueError"""
-    try:
-        return next(iter(iterable))
-    except StopIteration:
-        raise ValueError('iterable is empty')
+    """Returns the first value of an iterable. Might raise a StopIteration if iterable is empty"""
+    return next(iter(iterable))
 
 
 def get_random_unicode_strings(min_length: int=2, max_length: int=10, max_words: int=3) -> List[str]:
@@ -323,51 +320,44 @@ class PlaceholderTagModifier(Modifier):
             raise ValueError('alignment pair target token index out of range')
 
         alignments: List[Pair] = parse_alignments(alignment)
+        candidate_offset = 0;
 
-        # Get replacement candidates
-        candidates: List[Tuple[int, int]] = get_placeholding_candidates(alignments)
+        while True:
+            try:
+                # Get replacement candidate. Skip words that are already the same in the source and
+                # target sentence. This is to avoid having numbers trained with placeholders or any
+                # other words that are exactly the same.
+                candidate = first(
+                    candidate
+                    for candidate in get_placeholding_candidates(alignments[candidate_offset:])
+                    if source[candidate.src] != target[candidate.trg]
+                )
+            except StopIteration:
+                break
 
-        # Replace each of them with a THRESHOLD probability unless the two words are exactly the same
-        # This is to avoid having numbers trained with placeholders or any other words that are exactly the same
-        for candidate in candidates:
-            # Skip words that are already the same in the source and target sentence
-            if source[candidate.src] == target[candidate.trg]:
-                continue
+            # Candidate pair position in the alignments array
+            candidate_index = alignments.index(candidate)
 
-            # Skip words whose turn it isn't yet.
+            # Default for if we skip this word: next candidate is found after the current one
+            candidate_offset = candidate_index + 1
+
+             # Skip words whose turn it isn't yet.
             if random.random() >= self.probability:
                 continue
             
             # Select mode (skip random_weighted_choices*() when 'tag' is the only mode)
             mode = random_weighted_choice(self.modes) if len(self.modes) > 1 else 'tag'
 
-            if mode == "tag":
-                # Hint the expected output to the trainer by specifying it in the input as a tag
-                tag_tokens = self.template.format(src=source[candidate.src], trg=target[candidate.trg]).split(' ')
-                source = source[:candidate.src] + tag_tokens + source[candidate.src+1:]
+            if mode == "tag" or mode == "replace":
+                if mode == "tag":
+                    # Hint the expected output to the trainer by specifying it in the input as a tag
+                    augment_tokens = [target[candidate.trg]]
+                else:
+                    # Same as above, but instead of the expected target word, we replace it on both
+                    # sides with a random string. This encourages the model to really ignore the source
+                    # and produce the target that we desire.
+                    augment_tokens = get_random_unicode_strings()
                 
-                # __src__ aaa __trg__ bbb __done__ => bbb
-                # ^1      ^2  ^3      ^4  ^5          ^1
-                # So what is the correct alignment pairs for these? For now
-                # I map 1-1 2-1 3-1 4-1 5-1
-                # TODO: Why is this different from when `mode == replace`
-
-                # Fix up alignment pairs
-                index = alignments.index(candidate)
-                alignments = (
-                    # pairs before the replaced bit stay the same
-                    alignments[:index]
-                    # fill in the gap created by the replaced bit
-                    + [Pair(candidate.src + n, candidate.trg) for n in range(len(tag_tokens))]
-                    # pairs after the replaced bit have to be offset by the length of the replacement bit
-                    + [Pair(candidate.src + len(tag_tokens), candidate.trg) for pair in alignments[index+1:]]
-                )
-
-            elif mode == "replace":
-                # Same as above, but instead of the expected target word, we replace it on both
-                # sides with a random string. This encourages the model to really ignore the source
-                # and produce the target that we desire.
-                augment_tokens = get_random_unicode_strings()
                 tag_tokens = self.template.format(src=source[candidate.src], trg=' '.join(augment_tokens)).split(' ')
                 source = source[:candidate.src] + tag_tokens + source[candidate.src+1:]
                 target = target[:candidate.trg] + augment_tokens + target[candidate.trg+1:]
@@ -381,17 +371,18 @@ class PlaceholderTagModifier(Modifier):
                 # I map 2-1 2-2 2-3 + 4-1 5-2 6-3?
 
                 # Fix up alignment pairs
-                index = alignments.index(candidate)
                 alignments = (
                     # pairs before the replaced bit stay the same
-                    alignments[:index]
+                    alignments[:candidate_index]
                     # fill in the gap created by the replaced bit: the 2-1 2-2 2-3 bit
                     + [Pair(candidate.src + src_tag_offset, candidate.trg + n) for n in range(len(augment_tokens))]
                     # fill in the gap created by the replaced bit: the 4-1 5-2 6-3 bit
                     + [Pair(candidate.src + trg_tag_offset + n, candidate.trg + n) for n in range(len(augment_tokens))]
-                    # pairs after the replaced bit have to be offset by the length of the replacement bit
-                    + [Pair(candidate.src + len(tag_tokens), candidate.trg) for pair in alignments[index+1:]]
+                    # pairs after the replaced bit have to be offset by the length of the replacement
+                    # bit minus the length of the bit we replaced (1)
+                    + [Pair(pair.src + len(tag_tokens) - 1, pair.trg) for pair in alignments[candidate_index+1:]]
                 )
+                candidate_offset = candidate_index + 2 * len(augment_tokens)
 
             elif mode == "augment":
                 # Augment mode adds random noise both on the source and the target without any
@@ -401,19 +392,18 @@ class PlaceholderTagModifier(Modifier):
                 target = target[:candidate.trg+1] + augment_tokens + target[candidate.trg+1:]
 
                 # Fix up alignment pairs
-                index = alignments.index(candidate)
                 alignments = (
-                    # pairs before the replaced bit stay the same
-                    alignments[:index]
+                    # pairs before and including the candidate stay the same
+                    alignments[:candidate_index+1]
                     # fill in the gap created by the added random noise
-                    + [Pair(candidate.src + n, candidate.trg + n) for n in range(len(augment_tokens))]
+                    + [Pair(candidate.src + n, candidate.trg + n) for n in range(1, len(augment_tokens) + 1)]
                     # pairs after the replaced bit have to be offset by the length of the replacement bit
-                    + [Pair(candidate.src + len(augment_tokens), candidate.trg + len(augment_tokens)) for pair in alignments[index+1:]]
+                    + [Pair(pair.src + len(augment_tokens), pair.trg + len(augment_tokens)) for pair in alignments[candidate_index+1:]]
                 )
+                candidate_offset = candidate_index + len(augment_tokens) + 1
 
-            #TODO No further replacements are currently supported because `alignments` is now all
-            # messed up and doesn't match `candidates` any more.
-            break
+            else:
+                raise RuntimeError('unknown mode')
 
         source_detok = self.src_detokenizer.detokenize(source)
         target_detok = self.trg_detokenizer.detokenize(target)
