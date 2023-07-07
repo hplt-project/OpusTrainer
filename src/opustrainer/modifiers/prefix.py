@@ -55,9 +55,14 @@ class PrefixModifier(Modifier):
         # random.randrange(x) generates a number in the interval of [0, X)
         # max_start_token is computed as the difference in length of the two sequences which means that
         # we want random.ranrange(x) to produce [0, X], therefore we increment it by one.
-        start_token = random.randrange(max_start_token + 1)
-        
-        augment_substring:str  = " ".join(target_tok[start_token:start_token + num_tokens])
+        nums = list(range(len(target_tok)))
+        random.shuffle(nums)
+        nums = nums[:num_tokens]
+        augment_substring = " ".join([target_tok[i] for i in nums])
+
+        #start_token = random.randrange(max_start_token + 1)
+
+        #augment_substring:str  = " ".join(target_tok[start_token:start_token + num_tokens])
 
         # Return the modified string
         return self.template.format(trg=augment_substring) + line
