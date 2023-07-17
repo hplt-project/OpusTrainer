@@ -145,9 +145,9 @@ class TypoModifier(Modifier):
                 if has_alignment_info and modifier in ('random_space', 'skipped_space'):
                     data.result, fields[2] = random_space_with_alignment(modifier, data.result, fields[2])
                 else:
-                    wordcount = len(data.result.split(' '))
+                    wordcount = len(data.result.split())
                     getattr(data, modifier)()
-                    assert len(data.result.split(' ')) == wordcount or not has_alignment_info, f'Modifier {modifier} changed the word count while alignment info was not updated'
+                    assert len(data.result.split()) == wordcount or not has_alignment_info, f'Modifier {modifier} changed the word count while alignment info was not updated'
 
 
         fields[0] = data.result
