@@ -10,7 +10,7 @@ from opustrainer.modifiers import Modifier
 def random_space_with_alignment(action:Literal['random_space', 'skipped_space'], strval:str, alignments:str) -> Tuple[str, str]:
     """Special version of typo's random_space and skipped_space that also
     updates alignment info.
-    
+
     action: add | remove
       whether to add or remove a random space
 
@@ -23,7 +23,7 @@ def random_space_with_alignment(action:Literal['random_space', 'skipped_space'],
     """
     # all the locations where there are non-space characters.
     locations = [m.start() for m in re.finditer(r'\S', strval)]
-    
+
     if len(locations) == 0:
         return strval, alignments
 
@@ -50,7 +50,7 @@ def random_space_with_alignment(action:Literal['random_space', 'skipped_space'],
         # the mapping.
         if src <= word_index:
             fixed_alignments.append(f'{src}-{trg}')
-        
+
         # Alignments after the space are shifted by 1
         if action == 'random_space' and src >= word_index \
            or action == 'skipped_space' and src > word_index:
