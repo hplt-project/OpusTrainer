@@ -7,58 +7,124 @@ import typo
 from opustrainer.modifiers import Modifier
 
 
-def random_space_with_alignment(action:Literal['random_space', 'skipped_space'], strval:str, alignments:str) -> Tuple[str, str]:
-    """Special version of typo's random_space and skipped_space that also
-    updates alignment info.
-    
-    action: add | remove
-      whether to add or remove a random space
+def add_random_space_with_alignment(
+    string: str, alignment_str: str, include_edges=False
+) -> Tuple[str, str]:
+    """Add a space to a random point in the string"""
+    possible_insertions = [m.start() for m in re.finditer(r"\S", string)]
 
-    strval: str
-      input text
-
-    alignments: str
-      string of space split m-n pairs
-
-    """
-    # all the locations where there are non-space characters.
-    locations = [m.start() for m in re.finditer(r'\S', strval)]
-    
-    if len(locations) == 0:
-        return strval, alignments
-
-    # Select character after which to add a space
-    char_index = locations[random.randint(0, len(locations) - 1)]
-
-    # Figure out which word that character falls in
-    word_index = sum(1 for _ in re.finditer(r'\s+', strval[:char_index]))
-
-    # Insert space
-    if action == 'random_space':
-        strval = strval[:char_index] + ' ' + strval[char_index:]
+    if include_edges:
+        possible_insertions += [len(string)]  # also at end
     else:
-        strval = strval[:char_index-1] + strval[char_index:]
+        possible_insertions = possible_insertions[1:]  # not at beginning
 
-    # Fix up alignments
-    fixed_alignments = []
-    for alignment in alignments.split(' '):
-        # Splits the a-b pairs into tuples
-        src, trg = [int(index) for index in alignment.split('-', maxsplit=1)]
+    if not possible_insertions:
+        return string, alignment_str
 
-        # Alignments before the introduced space stay as-is. Intentionally, if
-        # the mapping is about word_index itself, we apply both to duplicate
-        # the mapping.
-        if src <= word_index:
-            fixed_alignments.append(f'{src}-{trg}')
-        
-        # Alignments after the space are shifted by 1
-        if action == 'random_space' and src >= word_index \
-           or action == 'skipped_space' and src > word_index:
-            src += 1 if action == 'random_space' else -1
-            fixed_alignments.append(f'{src}-{trg}')
+    index = random.choice(possible_insertions)
+    augmented_string = string[:index] + " " + string[index:]
 
-    return strval, ' '.join(fixed_alignments)
+    # Find positions of space-like segments that would not cause de-alignment
+    space_spans = list(re.finditer(r"^\s*|\s+|$", string[: index + 1]))
+    keep_alignment_indices = [m.end() for m in space_spans]
+    word_index = len(keep_alignment_indices) - 2
 
+    augmented_alignment_str = alignment_str
+    if index not in keep_alignment_indices:
+        assert len(augmented_string.split()) - len(string.split()) == 1
+        augmented_alignment = []
+
+        for align in alignment_str.split():
+            src, trg = [int(index) for index in align.split("-", maxsplit=1)]
+            if src <= word_index:
+                augmented_alignment.append(f"{src}-{trg}")
+            if src >= word_index:
+                augmented_alignment.append(f"{src+1}-{trg}")
+
+        augmented_alignment_str = " ".join(augmented_alignment)
+    return augmented_string, augmented_alignment_str
+
+
+def skip_random_space_with_alignment(
+    string: str, alignment_str: str, include_edges=False
+) -> Tuple[str, str]:
+    possible_removals = re.finditer(r"(?<!^)\s(?!$)", string)
+
+    if include_edges:
+        possible_removals = re.finditer(r"\s", string)
+    possible_removals = [m.start() for m in possible_removals]
+
+    if not possible_removals:
+        return string, alignment_str
+
+    index = random.choice(possible_removals)
+    augmented_string = string[:index] + string[index + 1 :]
+
+    word_spans = list(re.finditer(r"(?<=\S)\s\S", string))
+    word_index = None
+    for i, match in enumerate(word_spans):
+        if index == match.start():
+            word_index = i
+            break
+
+    augmented_alignment_str = alignment_str
+    if word_index is not None:
+        augmented_alignment = []
+        for align in alignment_str.split():
+            src, trg = [int(index) for index in align.split("-", maxsplit=1)]
+            if src <= word_index:
+                augmented_alignment.append(f"{src}-{trg}")
+            else:
+                augmented_alignment.append(f"{src-1}-{trg}")
+        augmented_alignment_str = " ".join(augmented_alignment)
+
+    return augmented_string, augmented_alignment_str
+
+
+def missing_char_with_alignment(string: str, alignment_str: str):
+    possible_removals = [m.start() for m in re.finditer(r"\S", string)]
+
+    # Do not remove only possible char
+    if len(possible_removals) <= 1:
+        return string, alignment_str
+
+    index = random.choice(possible_removals)
+    augmented_string = string[:index] + string[index + 1 :]
+
+    word_spans = list(re.finditer(r"\S+", string))
+
+    # Find word_index if a single-char word was removed
+    word_index = None
+    for i, match in enumerate(word_spans):
+        start, end = match.span()
+        if index > end:
+            continue
+        if start <= index:
+            if end - start == 1:
+                word_index = i
+            break
+
+    augmented_alignment_string = alignment_str
+    if word_index is not None:
+        augmented_alignment = []
+        # Reassign alignment to a random-neighbour
+        neighbours = []
+        if word_index != 0:
+            neighbours.append(-1)
+        if word_index != len(word_spans):
+            neighbours.append(0)
+        r = random.choice(neighbours)
+
+        for align in alignment_str.split():
+            src, trg = [int(index) for index in align.split("-", maxsplit=1)]
+            if src == word_index:
+                augmented_alignment.append(f"{src+r}-{trg}")
+            else:
+                offset = 0 if src < word_index else -1
+                augmented_alignment.append(f"{src+offset}-{trg}")
+        augmented_alignment_string = " ".join(augmented_alignment)
+
+    return augmented_string, augmented_alignment_string
 
 class TypoModifier(Modifier):
     # modifier name, and probability it is applied on a considered
@@ -142,12 +208,23 @@ class TypoModifier(Modifier):
         for modifier, probability in self.probabilities.items():
             if probability > random.random():
                 # Introducing spaces with alignment information is a problem.
-                if has_alignment_info and modifier in ('random_space', 'skipped_space'):
-                    data.result, fields[2] = random_space_with_alignment(modifier, data.result, fields[2])
+                if has_alignment_info and modifier in (
+                    "random_space",
+                    "skipped_space",
+                    "missing_char",
+                ):
+                    if modifier == "random_space":
+                        m_func = add_random_space_with_alignment
+                    elif modifier == "skipped_space":
+                        m_func = skip_random_space_with_alignment
+                    else:  # modifier == "missing_char":
+                        m_func = missing_char_with_alignment
+
+                    data.result, fields[2] = m_func(data.result, fields[2])
                 else:
-                    wordcount = len(data.result.split(' '))
+                    wordcount = len(data.result.split())
                     getattr(data, modifier)()
-                    assert len(data.result.split(' ')) == wordcount or not has_alignment_info, f'Modifier {modifier} changed the word count while alignment info was not updated'
+                    assert len(data.result.split()) == wordcount or not has_alignment_info, f'Modifier {modifier} changed the word count while alignment info was not updated'
 
 
         fields[0] = data.result

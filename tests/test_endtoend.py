@@ -1,11 +1,26 @@
-import sys
-import unittest
 import subprocess
+import sys
 import tempfile
+import unittest
+from pathlib import Path
 from typing import List
+
 
 class TestEndToEnd(unittest.TestCase):
     '''Tests the pipeline end-to-end. Aimed to to test the parser.'''
+
+    def __clean_states(self):
+        """Remove state files"""
+        basepath = Path("contrib")
+        for state in basepath.glob("*.yml.state"):
+            state.unlink(missing_ok=True)
+
+    def setUp(self) -> None:
+        self.__clean_states()
+
+    def tearDown(self) -> None:
+        self.__clean_states()
+
     def test_full_enzh(self):
         process = subprocess.run([sys.executable, '-m', 'opustrainer', '-c', 'contrib/test_enzh_config.yml', '-d', '--sync'], stdout = subprocess.PIPE, stderr=subprocess.PIPE, encoding="utf-8")
         output = process.stdout
