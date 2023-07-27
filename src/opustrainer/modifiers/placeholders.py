@@ -288,7 +288,7 @@ class PlaceholderTagModifier(Modifier):
         alignments = parse_alignments(alignment, source, target)
         candidate_offset = 0;
 
-        while True:
+        while self.probability > 0.0:
             try:
                 # Get replacement candidate. Skip words that are already the same in the source and
                 # target sentence. This is to avoid having numbers trained with placeholders or any
