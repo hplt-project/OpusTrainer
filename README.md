@@ -165,12 +165,13 @@ modifiers:
 #### Tags
 Adds a placeholder tag to the source sentence that can be used by the model to hint how it should translate that word. The word to hint is chosen at random from the target sentence. Only words with a 1-to-1 mapping between source and target are considered.
 
-This modifier needs a third column in the training data with per-word alignment information.
+This modifier needs a third column in the training data with per-word (technically: space separated token) alignment information.
 
 ```yaml
 - Tags: 0.05
   custom_detok_src: null
   custom_detok_trg: zh
+  spm_vocab: path/to/vocab.enzh.spm
   template: "__source__ {src} __target__ {trg} __done__"
 ```
 
@@ -178,7 +179,13 @@ All options are optional.
 
 You can specify custom detokenizer languages using `custom_detok_src` and `custom_detok_trg` if the dataset you're reading from has been tokenized by the Moses tokenizer. This can be helpful to do for languages that do not use spaces to delimit words. The default tokenisation strategy is splitting/joining by spaces.
 
+The `spm_vocab` option can be used to recompute the alignment info to match the tokenisation from the sentencepiece vocabulary. This is mostly useful for Marian, which takes untokenised input but expects the alignment info to match the sentencepiece tokenisation it performs.
+
 The format for telling the translation model the intention to translate a word in a certain way can be controlled by `template`. Here `{src}` and `{trg}` are replaced by the selected words from the source and target side of the sentence pair.
+
+**Note**: Due to how most modifiers are implemented, they will have a normalising effect on spaces. Sequences of spaces will be collapsed into a single space. This is also true for the *Tags* modifier.
+
+**Note**: Even if the probability of the *Tags* modifier is set to 0, it will apply detokenisation and optionally re-computation of the alignment on every sentence pair, regardless whether it was picked out to be modified or not.
 
 #### Prefix
 Prepends a random subsection of the target sentence before the source sentence. 
