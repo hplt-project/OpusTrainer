@@ -26,6 +26,7 @@ from opustrainer.modifiers.prefix import PrefixModifier
 from opustrainer.modifiers.surface import UpperCaseModifier, TitleCaseModifier
 from opustrainer.modifiers.placeholders import PlaceholderTagModifier
 from opustrainer.modifiers.typos import TypoModifier
+from opustrainer.modifiers.retokenize import RetokenizeModifier
 from opustrainer import logger
 
 def ignore_sigint():
@@ -36,10 +37,6 @@ def ignore_sigint():
     signal.signal(signal.SIGINT, signal.SIG_IGN)
 
 
-# Path to something that can shuffle data. Called with seed, output-path, input-files
-# TODO: Ideally this also deduplicates the src side of the sentence pairs it shuffles ;)
-PATH_TO_SHUFFLE = os.path.dirname(os.path.realpath(__file__)) + "/shuffle.py"
-
 # Available batch modifiers
 # TODO: Import these lazy, on demand?
 MODIFIERS = {
@@ -47,7 +44,8 @@ MODIFIERS = {
     'TitleCase': TitleCaseModifier,
     'Tags': PlaceholderTagModifier,
     'Typos': TypoModifier,
-    'Prefix': PrefixModifier
+    'Prefix': PrefixModifier,
+    'Retokenize': RetokenizeModifier,
 }
 
 @dataclass(frozen=True)
@@ -171,7 +169,8 @@ class DatasetReader:
         # feasible to just write to a named pipe (or even stdout) instead of
         # a temporary file, and let the trainer read directly from that. Not 
         # sure if that has any performance or stability benefits/drawbacks.
-        subprocess.check_call([sys.executable, PATH_TO_SHUFFLE,
+        subprocess.check_call([sys.executable,
+            '-m', 'opustrainer.shuffle',
             *(['--temporary-directory', self.tmpdir] if self.tmpdir else []),
             *([] if self.shuffle else ['--no-shuffle']),
             str(self.seed),
@@ -247,7 +246,8 @@ class AsyncDatasetReader(DatasetReader):
         self._pending = ShuffledFile(
             seed=seed,
             file=cast(TextIO, fh),
-            proc=subprocess.Popen([sys.executable, PATH_TO_SHUFFLE,
+            proc=subprocess.Popen([sys.executable,
+                '-m', 'opustrainer.shuffle',
                 *(['--temporary-directory', self.tmpdir] if self.tmpdir else []),
                 *([] if self.shuffle else ['--no-shuffle']),
                 str(seed),

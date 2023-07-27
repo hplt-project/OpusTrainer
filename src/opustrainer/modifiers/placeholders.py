@@ -1,9 +1,11 @@
 import random
 from operator import attrgetter
 from typing import Set, List, Tuple, Optional, Protocol, TypeVar, Iterable, NamedTuple
-from sacremoses import MosesDetokenizer
 
+from opustrainer.alignments import Pair, parse_alignments, format_alignments
 from opustrainer.modifiers import Modifier
+from opustrainer.tokenizers import Detokenizer, SpaceDetokenizer, SpaceTokenizer, MosesDetokenizer, SentencePieceTokenizer
+from opustrainer.modifiers.retokenize import Retokenizer, compute_mapping
 from opustrainer import logger
 
 
@@ -170,28 +172,6 @@ def get_random_unicode_strings(min_length: int=2, max_length: int=10, max_words:
     ]
 
 
-class Pair(NamedTuple):
-    """Alignment pair"""
-    src: int
-    trg: int
-
-    def __repr__(self):
-        return f'{self.src}-{self.trg}'
-
-
-def parse_alignment(pair:str) -> Pair:
-    src, trg = pair.split('-', maxsplit=1)
-    return Pair(int(src), int(trg))
-
-
-def parse_alignments(align_line:str) -> List[Pair]:
-    return [parse_alignment(pair) for pair in align_line.split()]
-
-
-def format_alignments(alignments:List[Pair]) -> str:
-    return ' '.join(f'{pair.src}-{pair.trg}' for pair in alignments)
-
-
 def filter_one_to_one_pairs(inlist: List[Pair]) -> List[Pair]:
     """Removes places non x->y x->z type of alignments. Remove anything that is found multiple
        times. Anything that is found multiple times means non bijective alignment. Since they
@@ -241,16 +221,6 @@ def get_placeholding_candidates(src_trg: List[Pair]) -> List[Pair]:
     return [pair for pair in src_trg if pair in selection]
 
 
-class Detokenizer(Protocol):
-    def detokenize(self, tokens:List[str]) -> str:
-        ...
-
-
-class SpaceDetokenizer:
-    def detokenize(self, tokens:List[str]) -> str:
-        return ' '.join(tokens)
-
-
 class PlaceholderTagModifier(Modifier):
     """Unpacks a line, removes the alignments, and applies placeholding. Supports trivial and non trivial detokenization
        using moses detokenizer, which should be used for CJK languages and languages where words are typically not space
@@ -269,25 +239,28 @@ class PlaceholderTagModifier(Modifier):
     """
 
     template: str
-    src_detokenizer: Detokenizer
-    trg_detokenizer: Detokenizer
+
+    src_retokenizer: Retokenizer
+    trg_retokenizer: Retokenizer
+
     modes: List[Tuple[str,float]]
 
     def __init__(self, probability: float=0.0, custom_detok_src: Optional[str]=None, custom_detok_trg: Optional[str]=None,
+        spm_vocab: Optional[str]=None,
         template: str="__source__ {src} __target__ {trg} __done__", augment: float=0, replace:float=0):
         super().__init__(probability)
 
         self.template = template
 
-        if custom_detok_src:
-            self.src_detokenizer = MosesDetokenizer(lang=custom_detok_src)
-        else:
-            self.src_detokenizer = SpaceDetokenizer()
+        self.src_retokenizer = Retokenizer(
+            detokenizer=MosesDetokenizer(custom_detok_src) if custom_detok_src else SpaceDetokenizer(),
+            tokenizer=SentencePieceTokenizer(spm_vocab) if spm_vocab else SpaceTokenizer()
+        )
 
-        if custom_detok_trg:
-            self.trg_detokenizer = MosesDetokenizer(lang=custom_detok_trg)
-        else:
-            self.trg_detokenizer = SpaceDetokenizer()
+        self.trg_retokenizer = Retokenizer(
+            detokenizer=MosesDetokenizer(custom_detok_trg) if custom_detok_trg else SpaceDetokenizer(),
+            tokenizer=SentencePieceTokenizer(spm_vocab) if spm_vocab else SpaceTokenizer()
+        )
 
         self.modes = []
 
@@ -310,16 +283,9 @@ class PlaceholderTagModifier(Modifier):
         """
 
         src, trg, alignment = line.strip().split('\t')
-        source = src.split(' ')
-        target = trg.split(' ')
-        alignments = parse_alignments(alignment)
-
-        if max(s for s, _ in alignments) >= len(source):
-            raise ValueError('alignment pair source token index out of range')
-        if max(t for _, t in alignments) >= len(target):
-            raise ValueError('alignment pair target token index out of range')
-
-        alignments: List[Pair] = parse_alignments(alignment)
+        source = src.split()
+        target = trg.split()
+        alignments = parse_alignments(alignment, source, target)
         candidate_offset = 0;
 
         while True:
@@ -358,12 +324,12 @@ class PlaceholderTagModifier(Modifier):
                     # and produce the target that we desire.
                     augment_tokens = get_random_unicode_strings()
                 
-                tag_tokens = self.template.format(src=source[candidate.src], trg=' '.join(augment_tokens)).split(' ')
+                tag_tokens = self.template.format(src=source[candidate.src], trg=' '.join(augment_tokens)).split()
                 source = source[:candidate.src] + tag_tokens + source[candidate.src+1:]
                 target = target[:candidate.trg] + augment_tokens + target[candidate.trg+1:]
 
-                src_tag_offset = first(n for n, tpl in enumerate(self.template.split(' ')) if '{src}' in tpl)
-                trg_tag_offset = first(n for n, tpl in enumerate(self.template.split(' ')) if '{trg}' in tpl)
+                src_tag_offset = first(n for n, tpl in enumerate(self.template.split()) if '{src}' in tpl)
+                trg_tag_offset = first(n for n, tpl in enumerate(self.template.split()) if '{trg}' in tpl)
 
                 # __src__ aaa __trg__ xxx yyy zzz __done__ => xxx yyy zzz
                 # ^1      ^2  ^3      ^4  ^5  ^6  ^7          ^1  ^2  ^3
@@ -405,11 +371,12 @@ class PlaceholderTagModifier(Modifier):
             else:
                 raise RuntimeError('unknown mode')
 
-        source_detok = self.src_detokenizer.detokenize(source)
-        target_detok = self.trg_detokenizer.detokenize(target)
+        source_detok, _, source_mapping = self.src_retokenizer.retokenize(source)
+        target_detok, _, target_mapping = self.trg_retokenizer.retokenize(target)
+        remapped_pairs = compute_mapping(source_mapping, target_mapping, alignments)
 
         # Return the sentence, source tagged a la Dinu et al, target as it is and no alignment info
-        return  source_detok + "\t" + target_detok + "\t" + format_alignments(alignments)
+        return  source_detok + "\t" + target_detok + "\t" + format_alignments(remapped_pairs)
 
     def validate(self, context:List[Modifier]) -> None:
         """Current limitation of the tags modifier is that any other modifier might modify the

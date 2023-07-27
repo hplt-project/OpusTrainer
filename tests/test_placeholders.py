@@ -16,7 +16,7 @@ class TestTagger(unittest.TestCase):
   def test_tagger_out_of_index(self):
     """Alignment pairs that do not map to any tokens should raise an error"""
     tagger = PlaceholderTagModifier(probability=1)
-    with self.assertRaisesRegex(ValueError, 'alignment pair target token index out of range'):
+    with self.assertRaisesRegex(ValueError, r'Out-of-bound alignment pairs: .+'):
       output = tagger('Hello world\tHallo Welt\t0-0 1-2')
 
   def test_tagger_tagging(self):
