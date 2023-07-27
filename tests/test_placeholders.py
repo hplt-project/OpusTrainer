@@ -41,6 +41,46 @@ class TestTagger(unittest.TestCase):
     output = tagger('Hello world\tHallo Welt\t0-0 1-1')
     self.assertEqual(output, '''Hello িৡহ world ЇӤӕѣѮ қӃӄЀҲ\tHallo িৡহ Welt ЇӤӕѣѮ қӃӄЀҲ\t0-0 1-1 2-2 3-3 4-4''')
 
+  def test_retokenize(self):
+    """Pass the spm vocab to the placeholder tag generator so that it can
+    retokenize the input, and update the alignments accordingly."""
+    tagger = PlaceholderTagModifier(
+      probability=0.25,
+      custom_detok_src='en',
+      custom_detok_trg='zh',
+      spm_vocab='contrib/test-data/vocab.zhen.spm')
+    
+    output = tagger('\t'.join([
+      'This is a simple test statement 🤣 .',
+      #^0   ^1 ^2 ^3    ^4   ^5        ^6 ^7
+      '这 是 一个 简单 的 测试 语 句 🤣 。',
+      #^0 ^1 ^2  ^3   ^4 ^5   ^6 ^7 ^8 ^9
+      '0-0 1-1 2-2 3-3 3-4 4-5 5-6 5-7 6-8 7-9',
+    ]))
+    self.assertEqual(output.split('\t'), [
+      '__source__ This __target__ 这 __done__ is a simple test statement 🤣.',
+      # [][__source__][This][ ][__target__][这][ ][__done__][ is][ a][ simple][ test][ statement][ ] []  []  []  [🤣][.]
+      #^0 ^1          ^2    ^3 ^4          ^5  ^6 ^7        ^8   ^9  ^10       ^11    ^12         ^13 ^14 ^15 ^16 ^17 ^18 
+      # Note the empty [] tokens before the special tokens: these are the spaces
+      # that are not part of the special marker tokens. It depends on how the
+      # spm vocab is trained.
+      '这是一个简单的测试语句 🤣 。',
+      #[这][是][一][个][简][单][的][测][试][语][句] [ ] []  []  []  [🤣][ 。]
+      #^0  ^1  ^2  ^3 ^4  ^5  ^6  ^7  ^8  ^9  ^10 ^11 ^12 ^13 ^14 ^15  ^16
+      '2-0 5-0 8-1 9-2 9-3 10-4 10-5 10-6 11-7 11-8 12-9 12-10 17-15 18-16',
+      # 0-0 [This]      [这]    2-0
+      #     [这]        [这]    5-0
+      # 1-1 [is]        [是]    8-1
+      # 2-2 [a]         [一个]  9-2 9-3
+      # 3-3 [simple]    [简单]  10-4 10-5
+      # 3-4 [simple]    [的]    10-6
+      # 4-5 [test]      [测试]  11-7 11-8
+      # 5-6 [statement] [语]    12-9
+      # 5-7 [statement] [句]    12-10 (13-11)
+      # 6-8 [🤣]        [🤣]   (14-12 15-13 16-14) 17-15
+      # 7-9 [.]         [。]    18-16
+    ])
+
   def test_tagger_zh_src(self):
     '''Tests the tagger with zh on the source side'''
     tagger = PlaceholderTagModifier(probability=0.6, custom_detok_src='zh')
