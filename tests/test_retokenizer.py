@@ -9,8 +9,41 @@ VOCAB = 'contrib/test-data/vocab.zhen.spm'
 class TestTokenizer(unittest.TestCase):
   maxDiff = None
 
-  def setUp(self):
-    random.seed(1)
+  def test_identity(self):
+    """The default tokenizer and detokenizer together should have no impact on
+    the output."""
+    tokenizer = RetokenizeModifier(
+      src=dict(detokenize='spaces', tokenize=f'spaces'),
+      trg=dict(detokenize='spaces', tokenize=f'spaces'))
+
+    test_pair = [
+      'This is a sentence split by spaces .',
+      'Is this a sentence that is split by spaces ?',
+      '0-1 1-0 2-2 3-3 4-6 5-7 6-8 7-9',
+    ]
+
+    self.assertEqual(tokenizer('\t'.join(test_pair)).split('\t'), test_pair)
+
+  def test_multiple_spaces(self):
+    """Spaces tokenizer should have no impact on the output, but it will 
+    normalize spaces due to how it is implemented."""
+    tokenizer = RetokenizeModifier(
+      src=dict(detokenize='spaces', tokenize=f'spaces'),
+      trg=dict(detokenize='spaces', tokenize=f'spaces'))
+
+    test_pair = [
+      'This is a    sentence split by spaces .',
+      'Is this a sentence    that is split by spaces ?',
+      '0-1 1-0 2-2 3-3 4-6 5-7 6-8 7-9',
+    ]
+
+    ref_pair = [
+      'This is a sentence split by spaces .',
+      'Is this a sentence that is split by spaces ?',
+      '0-1 1-0 2-2 3-3 4-6 5-7 6-8 7-9',
+    ]
+
+    self.assertEqual(tokenizer('\t'.join(test_pair)).split('\t'), ref_pair)
 
   def test_retokenize(self):
     tokenizer = RetokenizeModifier(
