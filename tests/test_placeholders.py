@@ -81,6 +81,30 @@ class TestTagger(unittest.TestCase):
       # 7-9 [.]         [。]    18-16
     ])
 
+  def test_retokenize_on_non_trigger(self):
+    """Pass the spm vocab to the placeholder tag generator so that it can
+    retokenize the input, even if probability is 0."""
+    tagger = PlaceholderTagModifier(
+      probability=0.0,
+      custom_detok_src='en',
+      custom_detok_trg='zh',
+      spm_vocab='contrib/test-data/vocab.zhen.spm')
+    
+    output = tagger('\t'.join([
+      'This is a simple test statement 🤣 .',
+      '这 是 一个 简单 的 测试 语 句 🤣 。',
+      '0-0 1-1 2-2 3-3 3-4 4-5 5-6 5-7 6-8 7-9',
+    ]))
+    self.assertEqual(output.split('\t'), [
+      'This is a simple test statement 🤣.',
+      #[This][ is][ a][ simple][ test][ statement][ ] [] [] [] [🤣][.]
+      #^0    ^1   ^2  ^3       ^4     ^5          ^6  ^7 ^8 ^9 ^10 ^11 
+      '这是一个简单的测试语句 🤣 。',
+      #[这][是][一][个][简][单][的][测][试][语][句] [ ] []  []  []  [🤣][ 。]
+      #^0  ^1  ^2  ^3 ^4  ^5  ^6  ^7  ^8  ^9  ^10 ^11 ^12 ^13 ^14 ^15  ^16
+      '0-0 1-1 2-2 2-3 3-4 3-5 3-6 4-7 4-8 5-9 5-10 10-15 11-16',
+    ])
+
   def test_tagger_zh_src(self):
     '''Tests the tagger with zh on the source side'''
     tagger = PlaceholderTagModifier(probability=0.6, custom_detok_src='zh')
