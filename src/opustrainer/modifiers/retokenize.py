@@ -46,7 +46,20 @@ def make_retokenizer(spec:Dict[str,str]) -> Retokenizer:
     )
 
 
-def compute_mapping(src_mapping:TokenMapping, trg_mapping:TokenMapping, alignments:List[Pair]) -> List[Pair]:
+def remap_alignment_pairs(src_mapping:TokenMapping, trg_mapping:TokenMapping, alignments:List[Pair]) -> List[Pair]:
+    """Will recalculate the alignment pairs to match a new tokenization scheme
+    according to the updated mappings for the source and target side of the
+    sentence pair.
+    
+    E.g. if you have
+    source-mapping: [0 => [3,4], 1 => [5]],
+    target-mapping: [0 => [0], 1 => [1]]
+    alignments:     [(0,1), (1,1)]
+    it will return  [
+        (3,1), (4,1), # the [0 => [3,4]] mapping
+        (5,1)         # the [1 => [5]] mapping
+    ]
+    """
     remapped = set()
     for old_src_idx, old_trg_idx in alignments:
         for src_idx in src_mapping[old_src_idx]:
@@ -56,6 +69,31 @@ def compute_mapping(src_mapping:TokenMapping, trg_mapping:TokenMapping, alignmen
 
 
 class RetokenizeModifier(Modifier):
+    """Retokenizes the input line, fixing up the alignments *but giving you the detokenized text*.
+    The probability argument is ignored. Most of this functionality is already built into the Tags
+    placeholder.
+
+    Default detokenizer and tokenizer are `spaces`, which just splits and joins the tokens with a
+    space in between. Other options are `moses:{lang}` for Moses detokenizer and tokenizer, and
+    `spm` for sentencepiece.
+
+    `spm` is only available as a tokenize option at this moment since other modifiers won't know
+    how to deal with spm input anyway.
+    
+    Usage:
+    ```yaml
+    modifiers:
+    - Retokenize: 0
+      src:
+        detokenize: moses:en
+        tokenize: spm:path/to/vocab.spm
+      trg:
+        detokenize: moses:zh
+        tokenize: spm:path/to/vocab.spm
+
+    ```
+    """
+
     src: Retokenizer
     trg: Retokenizer
 
@@ -71,6 +109,6 @@ class RetokenizeModifier(Modifier):
         pairs = parse_alignments(alignments, src_tokens, trg_tokens)
         new_src, new_src_tokens, src_mapping = self.src.retokenize(src_tokens)
         new_trg, new_trg_tokens, trg_mapping = self.trg.retokenize(trg_tokens)
-        remapped_pairs = compute_mapping(src_mapping, trg_mapping, pairs)
+        remapped_pairs = remap_alignment_pairs(src_mapping, trg_mapping, pairs)
         return '\t'.join((new_src, new_trg, format_alignments(remapped_pairs)))
 

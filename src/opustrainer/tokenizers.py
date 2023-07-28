@@ -4,7 +4,7 @@ from typing import Tuple, List, TypeVar, Callable, Union, Dict, Optional
 import sacremoses
 from sentencepiece import SentencePieceProcessor
 
-from opustrainer.types import TokenList, Tokenizer, Detokenizer
+from opustrainer.types import TokenList, TokenSpanList, Tokenizer, Detokenizer
 
 
 DETOKENIZERS = {
@@ -19,10 +19,26 @@ TOKENIZERS = {
 }
 
 
+T = TypeVar('T', bound=Union[Tokenizer,Detokenizer])
+
+def _make(implementations: Dict[str,Callable[...,T]], spec:str) -> T:
+    name, *args = spec.split(':')
+    return implementations[name](*args)
+
+def make_detokenizer(spec:str) -> Detokenizer:
+    """Creates a Detokenizer using a spec, e.g. `moses:en` or spm:path/to/vocab.spm`."""
+    return _make(DETOKENIZERS, spec)
+
+def make_tokenizer(spec:str) -> Tokenizer:
+    """Creates a Tokenizer using a spec, e.g. `moses:en` or spm:path/to/vocab.spm`."""
+    return _make(TOKENIZERS, spec)
+
+
 class SpaceTokenizer:
-    def tokenize(self, text:str) -> Tuple[TokenList, List[slice]]:
+    """Splits 'Hello World.' into `[Hello, World.]`."""
+    def tokenize(self, text:str) -> Tuple[TokenList, TokenSpanList]:
         tokens: TokenList = []
-        spans: List[slice] = []
+        spans: TokenSpanList = []
         for match in re.finditer(r'[^\s]+', text):
             tokens.append(match.group(0))
             spans.append(slice(match.start(0), match.end(0)))
@@ -30,7 +46,8 @@ class SpaceTokenizer:
 
 
 class SpaceDetokenizer:
-    def detokenize(self, tokens:TokenList) -> Tuple[str,List[slice]]:
+    """Turns `[Hello, World.]` back into `Hello World.`."""
+    def detokenize(self, tokens:TokenList) -> Tuple[str,TokenSpanList]:
         spans = []
         offset = 0
         for token in tokens:
@@ -40,14 +57,16 @@ class SpaceDetokenizer:
 
 
 class MosesTokenizer:
+    """Turns `Hello World.` into `[Hello, World, .]` according to Moses and,
+    if available, language specific rules."""
     tokenizer: sacremoses.MosesTokenizer
 
     def __init__(self, lang:str, custom_nonbreaking_prefixes:Optional[str]=None):
         self.tokenizer = sacremoses.MosesTokenizer(lang, custom_nonbreaking_prefixes)
 
-    def tokenize(self, text:str) -> Tuple[TokenList, List[slice]]:
+    def tokenize(self, text:str) -> Tuple[TokenList, TokenSpanList]:
         tokens = self.tokenizer.tokenize(text, escape=False)
-        spans: List[slice] = []
+        spans: TokenSpanList = []
         offset = 0
         for token in tokens:
             offset = text.find(token, offset)
@@ -59,12 +78,13 @@ class MosesTokenizer:
 
 
 class MosesDetokenizer:
+    """Turns `[Hello,World,.]` back into `Hello World.`. Rules can be language-specific."""
     detokenizer: sacremoses.MosesDetokenizer
 
     def __init__(self, lang:str):
         self.detokenizer = sacremoses.MosesDetokenizer(lang)
 
-    def detokenize(self, tokens:TokenList) -> Tuple[str,List[slice]]:
+    def detokenize(self, tokens:TokenList) -> Tuple[str,TokenSpanList]:
         text = self.detokenizer.detokenize(tokens)
         spans = []
         offset = 0
@@ -78,12 +98,13 @@ class MosesDetokenizer:
 
 
 class SentencePieceTokenizer:
+    """Turns `Hello World.` into something like [He,llo,_World,.] depending on your vocab."""
     spm: SentencePieceProcessor
 
     def __init__(self, vocab:str):
         self.spm = SentencePieceProcessor(vocab)
 
-    def tokenize(self, text:str) -> Tuple[TokenList,List[slice]]:
+    def tokenize(self, text:str) -> Tuple[TokenList,TokenSpanList]:
         # interestingly, piece.begin and piece.end are unicode offsets, not byte
         # offsets as the documentation would suggest. When byte-fallback happens,
         # there will be pieces where piece.begin and piece.end are the same value
@@ -104,15 +125,3 @@ class SentencePieceTokenizer:
         tokens = [text[span] for span in spans]
         return tokens, spans
 
-
-T = TypeVar('T', bound=Union[Tokenizer,Detokenizer])
-
-def _make(implementations: Dict[str,Callable[...,T]], spec:str) -> T:
-    name, *args = spec.split(':')
-    return implementations[name](*args)
-
-def make_detokenizer(spec:str) -> Detokenizer:
-    return _make(DETOKENIZERS, spec)
-
-def make_tokenizer(spec:str) -> Tokenizer:
-    return _make(TOKENIZERS, spec)

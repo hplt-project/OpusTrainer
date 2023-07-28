@@ -5,7 +5,7 @@ from typing import Set, List, Tuple, Optional, Protocol, TypeVar, Iterable, Name
 from opustrainer.alignments import Pair, parse_alignments, format_alignments
 from opustrainer.modifiers import Modifier
 from opustrainer.tokenizers import Detokenizer, SpaceDetokenizer, SpaceTokenizer, MosesDetokenizer, SentencePieceTokenizer
-from opustrainer.modifiers.retokenize import Retokenizer, compute_mapping
+from opustrainer.modifiers.retokenize import Retokenizer, remap_alignment_pairs
 from opustrainer import logger
 
 
@@ -26,7 +26,7 @@ def first(iterable:Iterable[T]) -> T:
     return next(iter(iterable))
 
 
-def get_random_unicode_strings(min_length: int=2, max_length: int=10, max_words: int=3) -> List[str]:
+def get_random_unicode_words(min_length: int=2, max_length: int=10, max_words: int=3) -> List[str]:
     """Gets a random unicode string of words, of up to max_words, where each word is of length
     min_length-max_length. Only one character set per invocation.
     Maybe should do special rules for emoji and CJK? Emoji wouldn't appear with spaces in between normally
@@ -334,7 +334,7 @@ class PlaceholderTagModifier(Modifier):
                     # Same as above, but instead of the expected target word, we replace it on both
                     # sides with a random string. This encourages the model to really ignore the source
                     # and produce the target that we desire.
-                    augment_tokens = get_random_unicode_strings()
+                    augment_tokens = get_random_unicode_words()
                 
                 tag_tokens = self.template.format(src=source[candidate.src], trg=' '.join(augment_tokens)).split()
                 source = source[:candidate.src] + tag_tokens + source[candidate.src+1:]
@@ -365,7 +365,7 @@ class PlaceholderTagModifier(Modifier):
             elif mode == "augment":
                 # Augment mode adds random noise both on the source and the target without any
                 # tagging encouraging the model to copy crap from one side to the other.
-                augment_tokens = get_random_unicode_strings()
+                augment_tokens = get_random_unicode_words()
                 source = source[:candidate.src+1] + augment_tokens + source[candidate.src+1:]
                 target = target[:candidate.trg+1] + augment_tokens + target[candidate.trg+1:]
 
@@ -382,7 +382,7 @@ class PlaceholderTagModifier(Modifier):
 
         source_detok, _, source_mapping = self.src_retokenizer.retokenize(source)
         target_detok, _, target_mapping = self.trg_retokenizer.retokenize(target)
-        remapped_pairs = compute_mapping(source_mapping, target_mapping, alignments)
+        remapped_pairs = remap_alignment_pairs(source_mapping, target_mapping, alignments)
 
         # Return the sentence, source tagged a la Dinu et al, target as it is and no alignment info
         return  source_detok + "\t" + target_detok + "\t" + format_alignments(remapped_pairs)

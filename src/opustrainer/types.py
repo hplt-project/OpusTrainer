@@ -2,20 +2,28 @@ from abc import ABC, abstractmethod
 from typing import NamedTuple, Dict, List, Tuple, Optional, Any, Protocol
 
 
+# List of tokens/words according to some tokenization scheme
 TokenList = List[str] # todo: bytes?
 
+# List of string offsets that accompanies a `TokenList` telling you where each
+# token is found in the original string.
+TokenSpanList = List[slice]
+
+# Mapping from `old token index` => [new token indices].
 TokenMapping = List[List[int]]
 
 
 class Tokenizer(Protocol):
-    """Turns a string into a list of tokens"""
-    def tokenize(self, text:str) -> Tuple[TokenList,List[slice]]:
+    """Turns a string into a list of tokens and slices. Each token has a slice
+    at the same offset that describes where in `text` that token is found."""
+    def tokenize(self, text:str) -> Tuple[TokenList,TokenSpanList]:
         ...
 
 
 class Detokenizer(Protocol):
-    """Turns a list of tokens into a string"""
-    def detokenize(self, tokens:TokenList) -> Tuple[str, List[slice]]:
+    """Turns a list of tokens into a string. The list of slices returned tells
+    you where each of the input tokens is found in the detokenized string."""
+    def detokenize(self, tokens:TokenList) -> Tuple[str, TokenSpanList]:
         ...
 
 
