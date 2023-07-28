@@ -309,6 +309,8 @@ class PlaceholderTagModifier(Modifier):
                     if source[candidate.src] != target[candidate.trg]
                 )
             except StopIteration:
+                # `first` failed because there are no sutable candidates, so lets break out of this
+                # loop as well and skip to the output printing part.
                 break
 
             # Candidate pair position in the alignments array
