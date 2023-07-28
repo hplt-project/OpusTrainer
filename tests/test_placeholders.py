@@ -13,12 +13,6 @@ class TestTagger(unittest.TestCase):
   def setUp(self):
     random.seed(1)
 
-  def test_tagger_out_of_index(self):
-    """Alignment pairs that do not map to any tokens should raise an error"""
-    tagger = PlaceholderTagModifier(probability=1)
-    with self.assertRaisesRegex(ValueError, r'Out-of-bound alignment pairs: .+'):
-      output = tagger('Hello world\tHallo Welt\t0-0 1-2')
-
   def test_tagger_tagging(self):
     """Default mode is tagging, and will hint the target word in the source input"""
     tagger = PlaceholderTagModifier(probability=1)
@@ -147,19 +141,31 @@ class TestTagger(unittest.TestCase):
           self.assertEqual(test, ref)
 
   def test_warn_if_tag_modifier_is_not_last(self):
-    with tempfile.NamedTemporaryFile(suffix='.log', prefix="placeholder") as tmpfile:
-        logger.setup_logger(outputfilename=tmpfile.name, disable_stderr=True)
-        loader = CurriculumLoader()
-        loader.load(dedent("""
-          datasets: {}
-          stages: []
-          seed: 1
-          modifiers:
-            - Tags: 1.0
-            - UpperCase: 1.0
-        """))
-        logger.logging.shutdown()
-        tmpfile.seek(0)
-        warning = tmpfile.readline().decode('utf-8')
-        self.assertRegex(warning, r"WARNING")
-        self.assertRegex(warning, r"Tags modifier should to be the last modifier to be applied")
+    with self.assertLogs(level='WARNING') as logger_ctx:
+      loader = CurriculumLoader()
+      loader.load(dedent("""
+        datasets: {}
+        stages: []
+        seed: 1
+        modifiers:
+          - Tags: 1.0
+          - UpperCase: 1.0
+      """))
+    self.assertRegex(logger_ctx.output[0], r"Tags modifier should to be the last modifier to be applied")
+
+  def test_warn_if_alignment_is_missing(self):
+    tagger = PlaceholderTagModifier()
+    with self.assertLogs(logger, level='WARNING') as logger_ctx:
+      self.assertEqual(
+        tagger('Hello world\tHallo welt\t'),
+        'Hello world\tHallo welt\t')
+    self.assertRegex(logger_ctx.output[0], r'empty alignment field')
+
+  def test_warn_if_alignment_is_missing(self):
+    tagger = PlaceholderTagModifier()
+    with self.assertLogs(level='WARNING') as logger_ctx:
+      self.assertEqual(
+        tagger('Hello world\tHallo welt\t0-0 1-2'),
+        'Hello world\tHallo welt\t')
+    self.assertRegex(logger_ctx.output[0], r'invalid alignments')
+

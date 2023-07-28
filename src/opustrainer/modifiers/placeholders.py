@@ -282,10 +282,20 @@ class PlaceholderTagModifier(Modifier):
            By default the detokenizer used is the trivial detokenizer, but we can instead have separate detokenizers on src and trg."
         """
 
-        src, trg, alignment = line.strip().split('\t')
+        src, trg, *rest = line.strip().split('\t')
         source = src.split()
         target = trg.split()
-        alignments = parse_alignments(alignment, source, target)
+        alignments = []
+        
+        # Try parsing alignments. If we fail, just treat this sentence pair as one with out any
+        # alignment info.
+        try:
+            alignments = parse_alignments(rest[0], source, target)
+        except IndexError:
+            logger.log_once(f"Encountered empty alignment field, ignoring alignment info for such lines", loglevel="WARNING")
+        except ValueError:
+            logger.log_once(f"Encountered invalid alignments, ignoring alignment info for such lines", loglevel="WARNING")
+
         candidate_offset = 0;
 
         while self.probability > 0.0:
