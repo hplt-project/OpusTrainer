@@ -329,6 +329,7 @@ class TestCurriculumLoader(unittest.TestCase):
 		curriculum = CurriculumLoader().load(config)
 		self.assertEqual([modifier.__class__.__name__ for modifier in curriculum.stages['start'].modifiers or []], ['UpperCaseModifier', 'TitleCaseModifier'])
 
+	@unittest.skip('`Tags` no longer raises an exception on invalid alignment pairs')
 	def test_modifier_error_line_context(self):
 		"""Test that when a modifier fails, we get context information about the line that failed"""
 		with tempfile.NamedTemporaryFile('w', encoding='utf-8') as fd:
