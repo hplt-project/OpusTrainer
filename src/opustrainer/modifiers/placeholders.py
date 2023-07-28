@@ -380,9 +380,6 @@ class PlaceholderTagModifier(Modifier):
                 )
                 candidate_offset = candidate_index + len(augment_tokens) + 1
 
-            else:
-                raise RuntimeError('unknown mode')
-
         source_detok, _, source_mapping = self.src_retokenizer.retokenize(source)
         target_detok, _, target_mapping = self.trg_retokenizer.retokenize(target)
         remapped_pairs = compute_mapping(source_mapping, target_mapping, alignments)
