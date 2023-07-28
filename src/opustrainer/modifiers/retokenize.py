@@ -8,27 +8,8 @@ from opustrainer.modifiers import Modifier
 from opustrainer import logger
 
 
-def print_cells(*rows, format:Callable[[Any],str]=repr,file=None) -> None:
-    # Convert it all to text
-    text_rows = [
-        [format(cell) for cell in row]
-        for row in rows
-    ]
-    
-    # Calculate column width
-    widths = [
-        max(len(cell) for cell in column)
-        for column in zip(*text_rows)
-    ]
-
-    # Print rows
-    for row in text_rows:
-        for width, cell in zip(widths, row):
-            print(f'{{:<{width:d}}} '.format(cell), end='', file=file)
-        print(file=file)
-
-
 def overlaps(r1:slice, r2:slice) -> bool:
+    """True if slice 1 (partially or fully) overlaps with slice 2."""
     # (a,b), (x,y) = r1, r2
     #      [a    b]             | a < y |  x < b
     # [x y]                 = F |   F   |    T
@@ -49,22 +30,11 @@ class Retokenizer(NamedTuple):
 
         old_to_new_mapping = [[] for _ in range(len(old_token_spans))]
 
-        # print(f"{detokenized=}")
-        # print_cells(new_tokens, new_token_spans)
-        # print(f"{new_token_spans=}")
-
         #TODO: This can be done much more efficiently
         for i, old_token_span in enumerate(old_token_spans):
             for j, new_token_span in enumerate(new_token_spans):
                 if overlaps(old_token_span, new_token_span):
                     old_to_new_mapping[i].append(j)
-
-        # for n, old_token_span, new_token_indices in zip(count(), old_token_spans, old_to_new_mapping):
-        #   print(f'<{n}>[{detokenized[old_token_span]}]({old_token_span.start},{old_token_span.stop}): ' + ' '.join(
-        #     f'<{new_idx}>[{detokenized[new_token_spans[new_idx]]}]({new_token_spans[new_idx].start},{new_token_spans[new_idx].stop})'
-        #     for new_idx in new_token_indices
-        #   ))
-        # print()
 
         return detokenized, new_tokens, old_to_new_mapping
 
