@@ -245,6 +245,10 @@ class PlaceholderTagModifier(Modifier):
 
     modes: List[Tuple[str,float]]
 
+    # Controls whether alignment info is printed. Normally this is controlled by
+    # `spm_vocab` argument, but in tests we also set this to True for testing.
+    print_alignments: bool
+
     def __init__(self, probability: float=0.0, custom_detok_src: Optional[str]=None, custom_detok_trg: Optional[str]=None,
         spm_vocab: Optional[str]=None,
         template: str="__source__ {src} __target__ {trg} __done__", augment: float=0, replace:float=0):
@@ -261,6 +265,9 @@ class PlaceholderTagModifier(Modifier):
             detokenizer=MosesDetokenizer(custom_detok_trg) if custom_detok_trg else SpaceDetokenizer(),
             tokenizer=SentencePieceTokenizer(spm_vocab) if spm_vocab else SpaceTokenizer()
         )
+
+        # For now only print alignments when spm_vocab is passed in. We'll improve upon this with #29.
+        self.print_alignments = spm_vocab is not None
 
         self.modes = []
 
@@ -382,10 +389,12 @@ class PlaceholderTagModifier(Modifier):
 
         source_detok, _, source_mapping = self.src_retokenizer.retokenize(source)
         target_detok, _, target_mapping = self.trg_retokenizer.retokenize(target)
-        remapped_pairs = remap_alignment_pairs(source_mapping, target_mapping, alignments)
-
-        # Return the sentence, source tagged a la Dinu et al, target as it is and no alignment info
-        return  source_detok + "\t" + target_detok + "\t" + format_alignments(remapped_pairs)
+        
+        if self.print_alignments:
+            remapped_pairs = remap_alignment_pairs(source_mapping, target_mapping, alignments)
+            return source_detok + "\t" + target_detok + "\t" + format_alignments(remapped_pairs)
+        else:
+            return source_detok + "\t" + target_detok
 
     def validate(self, context:List[Modifier]) -> None:
         """Current limitation of the tags modifier is that any other modifier might modify the

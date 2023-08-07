@@ -16,6 +16,7 @@ class TestTagger(unittest.TestCase):
   def test_tagger_tagging(self):
     """Default mode is tagging, and will hint the target word in the source input"""
     tagger = PlaceholderTagModifier(probability=1)
+    tagger.print_alignments = True
     output = tagger('Hello world\tHallo Welt\t0-0 1-1')
     self.assertEqual(output, '__source__ Hello __target__ Hallo __done__ __source__ world __target__ Welt __done__\tHallo Welt\t1-0 3-0 6-1 8-1')
     #                         ^0         ^1    ^2         ^3    ^4       ^5         ^6    ^7         ^8   ^9        ^0    ^1
@@ -24,6 +25,7 @@ class TestTagger(unittest.TestCase):
     """Replace mode is the same as tagging mode, except that the target word
     will be random noise, teaching the model to just copy it as is."""
     tagger = PlaceholderTagModifier(probability=0.25, replace=1)
+    tagger.print_alignments = True
     output = tagger('Hello world\tHallo Welt\t0-0 1-1')
     self.assertEqual(output, '''__source__ Hello __target__ িৡহ __done__ world\tিৡহ Welt\t1-0 3-0 5-1''')
     #                           ^0         ^1    ^2         ^3   ^4       ^5      ^0   ^1
@@ -32,6 +34,7 @@ class TestTagger(unittest.TestCase):
     """Augment mode will add random noise without tags to both source and target
     sentence, teaching the model to copy strings it doesn't understand."""
     tagger = PlaceholderTagModifier(probability=1, augment=1)
+    tagger.print_alignments = True
     output = tagger('Hello world\tHallo Welt\t0-0 1-1')
     self.assertEqual(output, '''Hello িৡহ world ЇӤӕѣѮ қӃӄЀҲ\tHallo িৡহ Welt ЇӤӕѣѮ қӃӄЀҲ\t0-0 1-1 2-2 3-3 4-4''')
 
@@ -158,7 +161,7 @@ class TestTagger(unittest.TestCase):
     with self.assertLogs(logger, level='WARNING') as logger_ctx:
       self.assertEqual(
         tagger('Hello world\tHallo welt\t'),
-        'Hello world\tHallo welt\t')
+        'Hello world\tHallo welt')
     self.assertRegex(logger_ctx.output[0], r'empty alignment field')
 
   def test_warn_if_alignment_is_missing(self):
@@ -166,6 +169,6 @@ class TestTagger(unittest.TestCase):
     with self.assertLogs(level='WARNING') as logger_ctx:
       self.assertEqual(
         tagger('Hello world\tHallo welt\t0-0 1-2'),
-        'Hello world\tHallo welt\t')
+        'Hello world\tHallo welt')
     self.assertRegex(logger_ctx.output[0], r'invalid alignments')
 
