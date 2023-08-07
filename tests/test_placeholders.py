@@ -102,46 +102,41 @@ class TestTagger(unittest.TestCase):
       '0-0 1-1 2-2 2-3 3-4 3-5 3-6 4-7 4-8 5-9 5-10 10-15 11-16',
     ])
 
-  def test_tagger_zh_src(self):
-    '''Tests the tagger with zh on the source side'''
-    tagger = PlaceholderTagModifier(probability=0.6, custom_detok_src='zh')
-    with open('contrib/test-data/clean.zhen.10', 'r', encoding='utf-8') as myinput, \
-         open('contrib/test-data/clean.zhen.ref.06.4.src', 'r', encoding='utf-8') as reference:
-        for line in myinput:
-          test = tagger(line)
-          ref = reference.readline()[:-1]
-          self.assertEqual(test, ref)
-  
-  def test_tagger_zh_trg(self):
-    '''Tests the tagger with zh on the target side'''
-    tagger = PlaceholderTagModifier(probability=0.6, custom_detok_src=None, custom_detok_trg='zh')
-    with open('contrib/test-data/clean.enzh.10', 'r', encoding='utf-8') as myinput, \
-         open('contrib/test-data/clean.enzh.ref.06.4.trg', 'r', encoding='utf-8') as reference:
-        for line in myinput:
-          test = tagger(line)
-          ref = reference.readline()[:-1]
-          self.assertEqual(test, ref)
+  def test_mode(self):
+    """Test that different calls will apply different modifications when
+    multiple modes are enabled."""
+    tagger = PlaceholderTagModifier(
+      probability=1.0,
+      custom_detok_src='zh',
+      augment=0.33,
+      replace=0.33,
+      # tag=0.33 is implicit
+    )
+    
+    example = [
+      '429 运输 中队 ( 429 野牛) , 使用 CC - 177',
+      '429 Transport Squadron (429 Bison Squadron) - Flying the CC-177',
+      '0-0 1-1 2-2 3-3 4-3 5-4 5-5 7-5 8-5 9-6 8-7 9-8 10-9',
+    ]
 
-  def test_tagger_no_zh(self):
-    '''Tests the tagger without zh detokenizer'''
-    tagger = PlaceholderTagModifier(probability=0.6)
-    with open('contrib/test-data/clean.enzh.10', 'r', encoding='utf-8') as myinput, \
-         open('contrib/test-data/clean.enzh.ref.06.4.none', 'r', encoding='utf-8') as reference:
-        for line in myinput:
-          test = tagger(line)
-          ref = reference.readline()[:-1]
-          self.assertEqual(test, ref)
+    refs = [
+      [ # tag + augment * 2
+        '429 __source__ 运输 __target__ Transport __done__ 中队んばずがまぃぱぷろ぀゙べぢ゜そるきと (429 野牛), 使用 CC - 177 w;V|#c<X_f =L=v<ZE"Ug',
+        '429 Transport Squadron んばずがまぃぱぷろ ぀゙べぢ゜そるきと (429 Bison Squadron) - Flying the CC-177 w;V|#c<X_f =L=v<ZE"Ug',
+      ],
+      [ # augment + tag * 2
+        '429 运输 ѕӥҸӹҶҀ ӯӷѬҁӔө ҫаэшҖӹ __source__ 中队 __target__ Squadron __done__ (429 野牛), 使用 CC - __source__ 177 __target__ ビフ __done__',
+        '429 Transport ѕӥҸӹҶҀ ӯӷѬҁӔө ҫаэшҖӹ Squadron (429 Bison Squadron) - Flying the ビフ',
+      ],
+      [ # replace * 3
+        '429 __source__ 运输 __target__ ϲ΋Ιϵϔώϭ ͷϨͻξϔΛΛ __done__ __source__ 中队 __target__ ͷϨͻξϔΛΛ __done__ (429 野牛), 使用 CC - __source__ 177 __target__ ुबॹ६ॉभऺॴढ॔ ॆ्ॺढ़ऀऱ।७३ॺ __done__',
+        '429 ϲ΋Ιϵϔώϭ ͷϨͻξϔΛΛ Squadron (429 Bison Squadron) - Flying ुबॹ६ॉभऺॴढ॔ ॆ्ॺढ़ऀऱ।७३ॺ CC-177',
+      ]
+    ]
 
-  def test_tagger_zh_src_augment_replace(self):
-    '''Tests the tagger with zh on the source side'''
-    tagger = PlaceholderTagModifier(probability=0.6, custom_detok_src='zh', custom_detok_trg=None,
-                                     augment=0.4, replace=0.4)
-    with open('contrib/test-data/clean.zhen.10', 'r', encoding='utf-8') as myinput, \
-         open('contrib/test-data/clean.zhen.ref.06.4.04.04.src', 'r', encoding='utf-8') as reference:
-        for line in myinput:
-          test = tagger(line)
-          ref = reference.readline()[:-1]
-          self.assertEqual(test, ref)
+    for ref in refs:
+      output = tagger('\t'.join(example))
+      self.assertEqual(output, '\t'.join(ref))
 
   def test_warn_if_tag_modifier_is_not_last(self):
     with self.assertLogs(level='WARNING') as logger_ctx:
