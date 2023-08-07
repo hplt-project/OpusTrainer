@@ -8,16 +8,18 @@ from opustrainer.modifiers import Modifier
 from opustrainer import logger
 
 
-def overlaps(r1:slice, r2:slice) -> bool:
-    """True if slice 1 (partially or fully) overlaps with slice 2."""
-    # (a,b), (x,y) = r1, r2
-    #      [a    b]             | a < y |  x < b
-    # [x y]                 = F |   F   |    T
-    #     [x y]             = T |   T   |    T
-    #         [x y]         = T |   T   |    T
-    #            [x y]      = T |   T   |    T
-    #                [x  y] = F |   T   |    F
-    return r1.start < r2.stop and r2.start < r1.stop
+def slice_cmp(r1:slice, r2:slice) -> int:
+    """Compare how two slices relate to each other.
+       Returns -1 if r1 is before r2,
+                0 if r1 and r2 overlap
+                1 if r1 is after r2
+    """
+    if r1.stop <= r2.start:
+        return -1
+    elif r1.start >= r2.stop:
+        return 1
+    else:
+        return 0
 
 
 class Retokenizer(NamedTuple):
@@ -30,11 +32,17 @@ class Retokenizer(NamedTuple):
 
         old_to_new_mapping = [[] for _ in range(len(old_token_spans))]
 
-        #TODO: This can be done much more efficiently
+        prev_j = 0
         for i, old_token_span in enumerate(old_token_spans):
-            for j, new_token_span in enumerate(new_token_spans):
-                if overlaps(old_token_span, new_token_span):
-                    old_to_new_mapping[i].append(j)
+            for j, new_token_span in enumerate(new_token_spans[prev_j:], start=prev_j):
+                prev_j = j
+                overlap = slice_cmp(old_token_span, new_token_span)
+                if overlap < 0: # old_token_span is before new_token_span
+                    break # skip to next old_token_span
+                elif overlap > 0: # old_token_span is after new_token_span
+                    continue # skip forward to next new_token_span
+                else:
+                    old_to_new_mapping[i].append(j) # overlap!
 
         return detokenized, new_tokens, old_to_new_mapping
 
