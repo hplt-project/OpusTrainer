@@ -782,6 +782,7 @@ def main() -> None:
     parser.add_argument("--temporary-directory", '-T', default=None, type=str, help='Temporary dir, used for shuffling and tracking state')
     parser.add_argument("--do-not-resume", '-d', action="store_true", help='Do not resume from the previous training state')
     parser.add_argument("--no-shuffle", '-n', action="store_false", help='Do not shuffle, for debugging', dest="shuffle")
+    parser.add_argument("--batch-size", '-b', type=int, default=100, help='Batch size')
     parser.add_argument("--log-level", type=str, default="INFO", help="Set log level. Available levels: DEBUG, INFO, WARNING, ERROR, CRITICAL. Default is INFO")
     parser.add_argument("--log-file", '-l', type=str, default=None, help="Target location for logging. Always logs to stderr and optionally to a file.")
     parser.add_argument("trainer", type=str, nargs=argparse.REMAINDER, help="Trainer program that gets fed the input. If empty it is read from config.")
@@ -825,7 +826,7 @@ def main() -> None:
     #      the trainer is already dead at this point.
     try:
         try:
-            for batch in state_tracker.run(trainer):
+            for batch in state_tracker.run(trainer, batch_size=args.batch_size):
                 model_trainer.stdin.writelines(batch)
         except KeyboardInterrupt:
             logger.log("Ctrl-c pressed, stopping training")
