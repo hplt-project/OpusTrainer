@@ -120,6 +120,7 @@ class DatasetReader:
     tmpdir: Optional[str]
 
     _fh: Optional[TextIO] = None
+    _next_line: str
 
     def __init__(self, dataset:Dataset, seed:int, tmpdir:Optional[str]=None, shuffle:bool=True):
         """
@@ -186,10 +187,38 @@ class DatasetReader:
         self._fh.seek(0)
         self.line = 0
 
+        # Buffer the first line, also asserting that we're not reading an empty file.
+        try:
+            self._read_line()
+        except StopIteration:
+            raise RuntimeError('reading from empty shuffled file')
+
+    def _read_line(self) -> None:
+        try:
+            # Try to find the next non-empty line
+            while True:
+                self._next_line = self._fh.readline()
+
+                # Empty return, not even a line ending, means EOF
+                if self._next_line == '':
+                    raise StopIteration
+
+                # Assert that the line is well formed, meaning non of the fields is the empty string
+                # If not, try to get a new line from the corpus
+                if any(field == '' for field in self._next_line.rstrip('\r\n').split('\t')):
+                    logger.log_once(f"[Trainer] Empty field in {self.dataset.name} line:\"{line}\", skipping...", loglevel="WARNING")
+                    continue
+
+                return
+        except StopIteration:
+            self._fh.close()
+            self.seed += 1
+            self.epoch += 1
+
     def __iter__(self):
         return self
 
-    def __next__(self):
+    def __next__(self) -> str:
         just_opened = False
         if not self._fh or self._fh.closed:
             self._open() # TODO: do we want to do this lazy? Yes, restore()
@@ -198,32 +227,13 @@ class DatasetReader:
             just_opened = True
 
         assert self._fh is not None
-        try:
-            # Try to read the next line from our shuffled file
-            while True:
-                line = self._fh.readline()
-                if line == '':
-                    raise StopIteration
-                self.line += 1
+        line = self._next_line
+        self.line += 1
 
-                # assert that the line is well formed, meaning non of the fields is the empty string
-                # If not, try to get a new line from the corpus
-                if any(field == '' for field in line.rstrip('\r\n').split('\t')):
-                    logger.log_once(f"[Trainer] Empty field in {self.dataset.name} line:\"{line}\", skipping...", loglevel="WARNING")
-                    continue
+        # Read next line into memory and test we're not at EOF
+        self._read_line()
 
-                return line
-        except StopIteration:
-            if just_opened:
-                raise RuntimeError('reading from empty shuffled file')
-
-            # Oh no we're out of lines! Close file, and move on to the next epoch
-            self._fh.close()
-            self.seed += 1
-            self.epoch += 1
-
-            # Now try again (will trigger the lazy open + just_opened protection)
-            return next(self)
+        return line
 
 
 @dataclass(frozen=True)
@@ -291,6 +301,12 @@ class AsyncDatasetReader(DatasetReader):
         # Make sure we start reading from the start again
         self._fh.seek(0)
         self.line = 0
+
+        # Buffer the first line, also asserting that we're not reading an empty file.
+        try:
+            self._read_line()
+        except StopIteration:
+            raise RuntimeError('reading from empty shuffled file')
 
         # Start shuffling next
         self._open_async(self.seed + 1)
