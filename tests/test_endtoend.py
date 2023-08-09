@@ -56,6 +56,8 @@ class TestEndToEnd(unittest.TestCase):
             'contrib/test-data/test_zhen_config_prefix.expected.out')
 
     def test_no_shuffle(self):
+        """Confirms that when an empty training procedure is used with
+        the `--no-shuffle` option, it reproduces its input."""
         for mode in [[], ['--sync']]:
             with self.subTest(mode=mode):
                 self.assertEndToEnd(
@@ -64,7 +66,7 @@ class TestEndToEnd(unittest.TestCase):
                         '-d',
                         *mode,
                         '--no-shuffle',
-                        '--batch-size', '1'
+                        '--batch-size', '1' # batch-size << dataset size otherwise we overproduce
                     ],
                     'contrib/test-data/clean.enzh.10')
 
@@ -79,6 +81,10 @@ class TestEndToEnd(unittest.TestCase):
             'contrib/test-data/test_enzh_tags_stage_config.expected.out')
 
     def test_log_file_and_stderr(self):
+        """Test that log messages go to stdout and to the logfile. Note that the
+        log file contains 10 iterations because the dataset is only 10 lines but
+        the batch size is 100. Termination conditions are only checked at the
+        end of the batch. TODO: this might be a bug, or at least unexpected."""
         with tempfile.NamedTemporaryFile(suffix='.log', prefix="opustrainer", mode='w+', encoding="utf-8") as tmpfile:
             process = subprocess.run(
                 [sys.executable, '-m', 'opustrainer', '-c', 'contrib/test_enzh_config_plain.yml', '-d', '-l', tmpfile.name],
