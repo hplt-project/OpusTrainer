@@ -14,10 +14,11 @@ import time
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from enum import Enum
-from typing import List, Tuple, Dict, Set, Any, Optional, Union, Type, TextIO, cast, Iterable, Literal, Iterable, Callable, TypeVar
+from typing import List, Tuple, Dict, Set, Any, Optional, Union, Type, TextIO, cast, Iterable, Literal, Iterable, Callable, TypeVar, get_type_hints, get_args, get_origin
 from tempfile import TemporaryFile
 from itertools import islice
 from functools import partial
+from pathlib import Path
 
 import yaml
 
@@ -360,8 +361,8 @@ class CurriculumV1Loader:
             seed=int(ymldata['seed']),
             datasets=datasets,
             stages_order=stages_order,
-            stages=self._load_stages(ymldata, stages_order, datasets),
-            modifiers=self._load_modifiers(ymldata)
+            stages=self._load_stages(ymldata, basepath, stages_order, datasets),
+            modifiers=self._load_modifiers(ymldata, basepath)
         )
 
     def _load_datasets(self, ymldata:dict, basepath:str) -> Dict[str,Dataset]:
@@ -386,7 +387,7 @@ class CurriculumV1Loader:
         """
         return list(ymldata['stages'])
 
-    def _load_stages(self, ymldata:dict, stages_order:List[str], datasets:Dict[str,Dataset]) -> Dict[str,Stage]:
+    def _load_stages(self, ymldata:dict, basepath:str, stages_order:List[str], datasets:Dict[str,Dataset]) -> Dict[str,Stage]:
         """Reads:
         ```yaml
         stagename:
@@ -406,11 +407,11 @@ class CurriculumV1Loader:
         ```
         """
         return {
-            stage_name: self._load_stage(ymldata, stage_name, datasets, int(ymldata['seed']))
+            stage_name: self._load_stage(ymldata, basepath, stage_name, datasets, int(ymldata['seed']))
             for stage_name in stages_order
         }
 
-    def _load_stage(self, ymldata:dict, stage_name:str, available_datasets:Dict[str,Dataset], seed:int) -> Stage:
+    def _load_stage(self, ymldata:dict, basepath:str, stage_name:str, available_datasets:Dict[str,Dataset], seed:int) -> Stage:
         datasets: List[Tuple[Dataset, float]] = []
 
         if isinstance(ymldata[stage_name], list):
@@ -446,12 +447,12 @@ class CurriculumV1Loader:
                 datasets=datasets,
                 until_dataset=until_dataset_name,
                 until_epoch=until_epoch,
-                modifiers=self._load_modifiers(ymldata[stage_name]) if isinstance(ymldata[stage_name], dict) and 'modifiers' in ymldata[stage_name] else None
+                modifiers=self._load_modifiers(ymldata[stage_name], basepath) if isinstance(ymldata[stage_name], dict) and 'modifiers' in ymldata[stage_name] else None
             )
         except Exception as exc:
             raise CurriculumLoaderError(f"could not complete the parse of stage '{stage_name}': {exc!s}") from exc
 
-    def _load_modifiers(self, ymldata:dict) -> List[Modifier]:
+    def _load_modifiers(self, ymldata:dict, basepath:str) -> List[Modifier]:
         """Reads
         ```yml
         modifiers:
@@ -464,7 +465,7 @@ class CurriculumV1Loader:
         ```
         """
         modifiers = [
-            self._load_modifier(modifier_entry)
+            self._load_modifier(modifier_entry, basepath)
             for modifier_entry in flatten(ymldata.get('modifiers', []))
         ]
 
@@ -473,7 +474,7 @@ class CurriculumV1Loader:
 
         return modifiers
 
-    def _load_modifier(self, modifier_entry: Dict[str, Any]) -> Modifier:
+    def _load_modifier(self, modifier_entry:Dict[str, Any], basepath:str) -> Modifier:
         (name, probability), *config_pairs = modifier_entry.items()
         settings = {
             **dict(config_pairs),
@@ -484,9 +485,46 @@ class CurriculumV1Loader:
         except KeyError:
             raise CurriculumLoaderError(f"unknown modifier '{name}'")
         try:
-            return modifier(**settings)
+            args = self._match_modifier_signature(modifier, settings, basepath)
+            return modifier(**args)
         except Exception as exc:
             raise CurriculumLoaderError(f"could not initialize modifier '{name}': {exc!s}") from exc
+
+    def _match_modifier_signature(self, fn:Type[Modifier], settings:Dict[str, Any], basepath:str) -> Dict[str,Any]:
+        """Casts `settings` values into the types expected by `fn`'s constructor. This mainly
+        exists so that a modifier can define a `arg:Path` argument that is then correctly
+        interpreted as a relative path."""
+        hints = get_type_hints(fn.__init__)
+        args = {}
+
+        for name, value in settings.items():
+            if name in hints:
+                try:
+                    value = self._dynamic_cast_parameter(hints[name], value, basepath)
+                except Exception as exc:
+                    raise CurriculumLoaderErrorf(f"could not convert '{name}' to the correct type: {exc!s}") from exc
+            args[name] = value
+        
+        return args
+
+    T = TypeVar('T')
+
+    def _dynamic_cast_parameter(self, typedef:Type[T], value:Any, basepath:str) -> T:
+        """Casts `value` into a type that matches `typedef`. Can deal with `Union`."""
+        if get_origin(typedef) == Union:
+            attempt_errors = ''
+            for subtype in get_args(typedef):
+                try:
+                    return self._dynamic_cast_parameter(subtype, value, basepath)
+                except err:
+                    attempt_errors += f'could not cast to {subtype!r}: {err!s}\n'
+            raise ValueError(attempts)
+        elif typedef == Path:
+            return Path(basepath).joinpath(value)
+        elif typedef == type(None) and value is None:
+            return None
+        else:
+            return typedef(value)
 
 
 class CurriculumLoader:

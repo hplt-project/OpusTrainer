@@ -1,5 +1,6 @@
 import random
 from operator import attrgetter
+from pathlib import Path
 from typing import Set, List, Tuple, Optional, Protocol, TypeVar, Iterable, NamedTuple
 
 from opustrainer.alignments import Pair, parse_alignments, format_alignments
@@ -250,7 +251,7 @@ class PlaceholderTagModifier(Modifier):
     print_alignments: bool
 
     def __init__(self, probability: float=0.0, custom_detok_src: Optional[str]=None, custom_detok_trg: Optional[str]=None,
-        spm_vocab: Optional[str]=None,
+        spm_vocab: Optional[Path]=None,
         template: str="__source__ {src} __target__ {trg} __done__", augment: float=0, replace:float=0):
         super().__init__(probability)
 

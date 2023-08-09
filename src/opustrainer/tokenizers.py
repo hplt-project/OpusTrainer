@@ -1,5 +1,6 @@
 import re
 from typing import Tuple, List, TypeVar, Callable, Union, Dict, Optional
+from pathlib import Path
 
 import sacremoses
 from sentencepiece import SentencePieceProcessor
@@ -101,8 +102,8 @@ class SentencePieceTokenizer:
     """Turns `Hello World.` into something like [He,llo,_World,.] depending on your vocab."""
     spm: SentencePieceProcessor
 
-    def __init__(self, vocab:str):
-        self.spm = SentencePieceProcessor(vocab)
+    def __init__(self, vocab:Path):
+        self.spm = SentencePieceProcessor(str(vocab))
 
     def tokenize(self, text:str) -> Tuple[TokenList,TokenSpanList]:
         # interestingly, piece.begin and piece.end are unicode offsets, not byte
