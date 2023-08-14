@@ -28,15 +28,15 @@ def get_log_level(name: str) -> int:
         logging.log(logging.WARNING, f"unknown log level level used: {name} assuming warning...")
         return logging.WARNING
 
-def log(msg: str, loglevel: str = "INFO") -> None:
+def log(msg: str, loglevel: str = "INFO", **kwargs) -> None:
     level = get_log_level(loglevel)
-    logging.log(level, msg)
+    logging.log(level, msg, **kwargs)
 
 
 @lru_cache(None)
-def log_once(msg: str, loglevel: str = "INFO") -> None:
+def log_once(msg: str, loglevel: str = "INFO", **kwargs) -> None:
     """A wrapper to log, to make sure that we only print things once"""
-    log(msg, loglevel)
+    log(msg, loglevel, **kwargs)
 
 
 def setup_logger(outputfilename: Optional[str] = None, loglevel: str = "INFO", disable_stderr: bool=False) -> None:

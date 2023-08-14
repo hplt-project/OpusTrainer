@@ -151,19 +151,12 @@ class TestTagger(unittest.TestCase):
       """))
     self.assertRegex(logger_ctx.output[0], r"Tags modifier should to be the last modifier to be applied")
 
-  def test_warn_if_alignment_is_missing(self):
+  def test_exception_if_alignment_is_missing(self):
     tagger = PlaceholderTagModifier()
-    with self.assertLogs(logger, level='WARNING') as logger_ctx:
-      self.assertEqual(
-        tagger('Hello world\tHallo welt\t'),
-        'Hello world\tHallo welt')
-    self.assertRegex(logger_ctx.output[0], r'empty alignment field')
+    with self.assertRaises(IndexError):
+      tagger('Hello world\tHallo welt\t')
 
-  def test_warn_if_alignment_is_missing(self):
+  def test_exception_if_alignment_is_invalid(self):
     tagger = PlaceholderTagModifier()
-    with self.assertLogs(level='WARNING') as logger_ctx:
-      self.assertEqual(
-        tagger('Hello world\tHallo welt\t0-0 1-2'),
-        'Hello world\tHallo welt')
-    self.assertRegex(logger_ctx.output[0], r'invalid alignments')
-
+    with self.assertRaises(ValueError):
+      tagger('Hello world\tHallo welt\t0-0 1-2')

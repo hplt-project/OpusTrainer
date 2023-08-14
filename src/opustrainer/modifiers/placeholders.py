@@ -295,15 +295,9 @@ class PlaceholderTagModifier(Modifier):
         target = trg.split()
         alignments = []
         
-        # Try parsing alignments. If we fail, just treat this sentence pair as one with out any
-        # alignment info.
-        try:
-            alignments = parse_alignments(rest[0], source, target)
-        except IndexError:
-            logger.log_once(f"Encountered empty alignment field, ignoring alignment info for such lines", loglevel="WARNING")
-        except ValueError:
-            logger.log_once(f"Encountered invalid alignments, ignoring alignment info for such lines", loglevel="WARNING")
-
+        # Try parsing alignments. If we fail, the sentence will be thrown out
+        # by the trainer.
+        alignments = parse_alignments(rest[0], source, target)
         candidate_offset = 0;
 
         while self.probability > 0.0:

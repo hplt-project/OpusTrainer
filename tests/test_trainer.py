@@ -9,6 +9,7 @@ from collections import Counter
 from contextlib import closing
 from textwrap import dedent
 from io import StringIO
+from itertools import chain
 
 import yaml
 
@@ -329,7 +330,6 @@ class TestCurriculumLoader(unittest.TestCase):
 		curriculum = CurriculumLoader().load(config)
 		self.assertEqual([modifier.__class__.__name__ for modifier in curriculum.stages['start'].modifiers or []], ['UpperCaseModifier', 'TitleCaseModifier'])
 
-	@unittest.skip('`Tags` no longer raises an exception on invalid alignment pairs')
 	def test_modifier_error_line_context(self):
 		"""Test that when a modifier fails, we get context information about the line that failed"""
 		with tempfile.NamedTemporaryFile('w', encoding='utf-8') as fd:
@@ -357,5 +357,11 @@ class TestCurriculumLoader(unittest.TestCase):
 
 			trainer = Trainer(curriculum)
 			
-			with self.assertRaisesRegex(Exception, "Exception while processing item 1:"):
-				list(trainer.run(batch_size=2))
+			with self.assertLogs(level='WARNING') as logger_ctx:
+				output = list(chain.from_iterable(trainer.run(batch_size=1)))
+				# Assert we skipped the line
+				self.assertEqual(len(output), 1)
+				# Assert that we got the general error message
+				self.assertRegex(logger_ctx.output[0], r'Exception while processing line, skipping:')
+				# Assert that we got the specific error as well
+				self.assertRegex(logger_ctx.output[0], r'ValueError: Out-of-bound alignment pairs')

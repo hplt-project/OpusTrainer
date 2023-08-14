@@ -593,12 +593,13 @@ In = TypeVar('In')
 
 Out = TypeVar('Out')
 
-def trace_map(fn: Callable[[In], Out], items: Iterable[In]) -> Iterable[Out]:
-    for n, item in enumerate(items):
+def try_trace_map(fn: Callable[[In], Out], items: Iterable[In]) -> Iterable[Out]:
+    for item in items:
         try:
             yield fn(item)
         except Exception as exc:
-            raise Exception(f'Exception while processing item {n}: {item!r}') from exc
+            logger.log(f'Exception while processing line, skipping: {item!r}', 'WARNING',
+                exc_info=(type(exc), exc, exc.__traceback__.tb_next)) # skip fn(item) frame
 
 
 class Trainer:
@@ -698,7 +699,7 @@ class Trainer:
                 # Apply any modifiers to random lines in the batch, or sentence
                 # (Multiple modifiers can be applied to the same line!)
                 for modifier in modifiers:
-                    batch = list(trace_map(lambda line: modifier(line.rstrip('\r\n')) + '\n', batch))
+                    batch = list(try_trace_map(lambda line: modifier(line.rstrip('\r\n')) + '\n', batch))
 
                 if self.shuffle:
                     random.shuffle(batch)

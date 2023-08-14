@@ -11,14 +11,10 @@ def parse_alignments(pairs:str, src_tokens:Optional[TokenList]=None, trg_tokens:
     ]
 
     if src_tokens is not None and trg_tokens is not None:
-        invalid_pairs = [
-            pair
-            for pair in pairs
-            if pair.src < 0 or pair.src >= len(src_tokens)
-            or pair.trg < 0 or pair.trg >= len(trg_tokens)
-        ]
-        if invalid_pairs:
-            raise ValueError('Out-of-bound alignment pairs: ' + ' '.join(map(repr, invalid_pairs)))
+        for pair in pairs:
+            if pair.src < 0 or pair.src >= len(src_tokens) \
+            or pair.trg < 0 or pair.trg >= len(trg_tokens):
+                raise ValueError('Out-of-bound alignment pairs')
 
     return pairs
 
