@@ -14,6 +14,7 @@ from itertools import chain
 import yaml
 
 from opustrainer.trainer import Curriculum, CurriculumLoaderError, Dataset, DatasetReader, AsyncDatasetReader, CurriculumLoader, Trainer, StateTracker, Stage
+from opustrainer.logger import log_once
 
 TEST_FILE: str
 
@@ -390,14 +391,20 @@ class TestCurriculumLoader(unittest.TestCase):
 			}
 			curriculum = CurriculumLoader().load(config)
 
-			trainer = Trainer(curriculum, num_fields=config['num_fields'])
+			for reader in [DatasetReader, AsyncDatasetReader]:
+				with self.subTest(reader=reader.__name__), \
+				 self.assertLogs(level='WARNING') as logger_ctx, \
+				 closing(Trainer(curriculum, reader=reader)) as trainer:
+					# Reset the log_once cache
+					log_once.cache_clear()
 
-			with self.assertLogs(level='WARNING') as logger_ctx:
-				output = list(chain.from_iterable(trainer.run(batch_size=1)))
-				# Assert we skipped the line
-				self.assertEqual(len(output), 2)
-				# Assert we properly cropped the lines and left the others unchanged
-				self.assertEqual(output[0], 'This is a test\tDas ist ein Test\t0-0 1-1 2-2 3-3\n')
-				self.assertEqual(output[1], 'This is a test\tDas ist ein Test\t0-0 1-1 2-2 3-3\n')
-				# Assert that we got an error message for one line
-				self.assertRegex(logger_ctx.output[0], r'\[Trainer\] Expected 3 fields in clean line:')
+					output = list(chain.from_iterable(trainer.run(batch_size=1)))
+					# Assert we skipped the line
+					self.assertEqual(len(output), 2)
+					# Assert we properly cropped the lines and left the others unchanged
+					self.assertEqual(output, [
+						'This is a test\tDas ist ein Test\t0-0 1-1 2-2 3-3\n',
+						'This is a test\tDas ist ein Test\t0-0 1-1 2-2 3-3\n'
+					])
+					# Assert that we got an error message for one line
+					self.assertRegex(logger_ctx.output[0], r'\[Trainer\] Expected 3 fields in clean line:')

@@ -76,6 +76,10 @@ class Curriculum:
     modifiers: List[Modifier]
     stages_order: List[str]
 
+    # Optionally, check how many fields each row of the datasets should have
+    # Too many should select the N first fields. Too few should drop the row.
+    num_fields: Optional[int]
+
     def __post_init__(self):
         if len(self.stages) != len(frozenset(self.stages)):
             raise ValueError('stages can only occur once')
@@ -120,7 +124,7 @@ class DatasetReader:
     _fh: Optional[TextIO] = None
     _next_line: str
 
-    def __init__(self, dataset:Dataset, seed:int, tmpdir:Optional[str]=None, shuffle:bool=True,\
+    def __init__(self, dataset:Dataset, seed:int, tmpdir:Optional[str]=None, shuffle:bool=True,
                  num_fields:Optional[int]=None):
         """
         Parameters
@@ -223,8 +227,8 @@ class DatasetReader:
                         self._next_line = '\t'.join(fields[:self.num_fields]) + '\n'
                         return
                     elif len(fields) < self.num_fields:
-                        myline: str = self._next_line.rstrip('\r\n') # We can't call the function inside the string format prior to python 3.12
-                        logger.log_once(f"[Trainer] Expected {self.num_fields} fields in {self.dataset.name} line: \"{myline}\" but only got {len(fields)}, skipping...", loglevel="WARNING")
+                        original_line = self._next_line.rstrip('\r\n') # We can't call the function inside the string format prior to python 3.12
+                        logger.log_once(f"[Trainer] Expected {self.num_fields} fields in {self.dataset.name} line: \"{original_line}\" but only got {len(fields)}, skipping...", loglevel="WARNING")
                         continue
 
                 return
@@ -394,7 +398,8 @@ class CurriculumV1Loader:
             datasets=datasets,
             stages_order=stages_order,
             stages=self._load_stages(ymldata, basepath, stages_order, datasets),
-            modifiers=self._load_modifiers(ymldata, basepath)
+            modifiers=self._load_modifiers(ymldata, basepath),
+            num_fields=int(ymldata['num_fields']) if 'num_fields' in ymldata else None
         )
 
     def _load_datasets(self, ymldata:dict, basepath:str) -> Dict[str,Dataset]:
@@ -633,16 +638,12 @@ class Trainer:
     # Reader class to use (I.e. DatasetReader or AsyncDatasetReader)
     _reader_impl: Type[DatasetReader]
 
-    # Optionally, check how many fields we should have
-    num_fields: Optional[int]
-
     def __init__(self, curriculum:Curriculum, *, reader:Type[DatasetReader] = DatasetReader, \
-                 tmpdir:Optional[str]=None, shuffle:bool=True, num_fields:Optional[int]=None):
+                 tmpdir:Optional[str]=None, shuffle:bool=True):
         self.curriculum = curriculum
         self.tmpdir = tmpdir
         self.shuffle = shuffle
         self._reader_impl = reader
-        self.num_fields = num_fields
         random.seed(self.curriculum.seed)
         first_stage_name = self.curriculum.stages_order[0]
 
@@ -662,7 +663,11 @@ class Trainer:
         random.setstate(state.random_state)
         self.stage = self.curriculum.stages[state.stage]
         self.readers = {
-            dataset.name: self._reader_impl(dataset, self.curriculum.seed, tmpdir=self.tmpdir, shuffle=self.shuffle, num_fields=self.num_fields).restore(state.datasets[dataset.name])
+            dataset.name: self._reader_impl(dataset, self.curriculum.seed,
+                tmpdir=self.tmpdir,
+                shuffle=self.shuffle,
+                num_fields=self.curriculum.num_fields
+            ).restore(state.datasets[dataset.name])
             for dataset in self.curriculum.datasets.values()
         }
         self.epoch_tracker = EpochTracker(self.readers[self.stage.until_dataset]).restore(state.epoch_tracker_state)
@@ -823,9 +828,10 @@ def main() -> None:
         if missing_files:
             raise ValueError(f"Dataset '{dataset.name}' is missing files: {missing_files}")
 
-    trainer = Trainer(curriculum, reader=DatasetReader if args.sync else AsyncDatasetReader,\
-                       tmpdir=args.temporary_directory, shuffle=args.shuffle, \
-                        num_fields=config['num_fields'] if 'num_fields' in config else None)
+    trainer = Trainer(curriculum,
+        reader=DatasetReader if args.sync else AsyncDatasetReader,
+        tmpdir=args.temporary_directory,
+        shuffle=args.shuffle)
 
     state_tracker = StateTracker(args.state or f'{args.config}.state', restore=not args.do_not_resume)
 
