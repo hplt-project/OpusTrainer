@@ -113,13 +113,15 @@ class DatasetReader:
     line: int
     epoch: int
     shuffle: bool
+    num_fields: Optional[int]
 
     tmpdir: Optional[str]
 
     _fh: Optional[TextIO] = None
     _next_line: str
 
-    def __init__(self, dataset:Dataset, seed:int, tmpdir:Optional[str]=None, shuffle:bool=True):
+    def __init__(self, dataset:Dataset, seed:int, tmpdir:Optional[str]=None, shuffle:bool=True,\
+                 num_fields:Optional[int]=None):
         """
         Parameters
         ----------
@@ -131,6 +133,9 @@ class DatasetReader:
             Path to directory in which the temporary shuffled dataset is written (default is `tempfile.gettempdir()`)
         shuffle : bool
             Indicates whether shuffling should happen. Enabled by default.
+        num_fields: int, optional
+            Optionally specify the number of fields each line should have. Trim to the required number if they are
+            more than the necessary fields, or remove lines that don't have the required number of fields.
         """
         self.dataset = dataset
         self.seed = seed
@@ -138,6 +143,7 @@ class DatasetReader:
         self.epoch = 0
         self.line = 0
         self.shuffle = shuffle
+        self.num_fields = num_fields
 
     def state(self) -> DatasetState:
         return DatasetState(self.seed, self.line, self.epoch)
@@ -202,9 +208,24 @@ class DatasetReader:
 
                 # Assert that the line is well formed, meaning non of the fields is the empty string
                 # If not, try to get a new line from the corpus
-                if any(field == '' for field in self._next_line.rstrip('\r\n').split('\t')):
-                    logger.log_once(f"[Trainer] Empty field in {self.dataset.name} line:\"{line}\", skipping...", loglevel="WARNING")
+                fields: List[str] = self._next_line.rstrip('\r\n').split('\t')
+                if any(field == '' for field in fields):
+                    myline: str = self._next_line.rstrip('\r\n') # We can't call the function inside the string format prior to python 3.12
+                    logger.log_once(f"[Trainer] Empty field in {self.dataset.name} line: \"{myline}\", skipping...", loglevel="WARNING")
                     continue
+
+                # Try to see if we have the right number of fields and remove lines
+                # that don't have all the fields or remove extra fields.
+                if self.num_fields is not None:
+                    if len(fields) == self.num_fields:
+                        return
+                    elif len(fields) > self.num_fields:
+                        self._next_line = '\t'.join(fields[:self.num_fields]) + '\n'
+                        return
+                    elif len(fields) < self.num_fields:
+                        myline: str = self._next_line.rstrip('\r\n') # We can't call the function inside the string format prior to python 3.12
+                        logger.log_once(f"[Trainer] Expected {self.num_fields} fields in {self.dataset.name} line: \"{myline}\" but only got {len(fields)}, skipping...", loglevel="WARNING")
+                        continue
 
                 return
         except StopIteration:
@@ -513,7 +534,7 @@ class CurriculumV1Loader:
                 try:
                     value = self._dynamic_cast_parameter(hints[name], value, basepath)
                 except Exception as exc:
-                    raise CurriculumLoaderErrorf(f"could not convert '{name}' to the correct type: {exc!s}") from exc
+                    raise CurriculumLoaderError(f"could not convert '{name}' to the correct type: {exc!s}") from exc
             args[name] = value
         
         return args
@@ -612,11 +633,16 @@ class Trainer:
     # Reader class to use (I.e. DatasetReader or AsyncDatasetReader)
     _reader_impl: Type[DatasetReader]
 
-    def __init__(self, curriculum:Curriculum, *, reader:Type[DatasetReader] = DatasetReader, tmpdir:Optional[str]=None, shuffle:bool=True):
+    # Optionally, check how many fields we should have
+    num_fields: Optional[int]
+
+    def __init__(self, curriculum:Curriculum, *, reader:Type[DatasetReader] = DatasetReader, \
+                 tmpdir:Optional[str]=None, shuffle:bool=True, num_fields:Optional[int]=None):
         self.curriculum = curriculum
         self.tmpdir = tmpdir
         self.shuffle = shuffle
         self._reader_impl = reader
+        self.num_fields = num_fields
         random.seed(self.curriculum.seed)
         first_stage_name = self.curriculum.stages_order[0]
 
@@ -636,7 +662,7 @@ class Trainer:
         random.setstate(state.random_state)
         self.stage = self.curriculum.stages[state.stage]
         self.readers = {
-            dataset.name: self._reader_impl(dataset, self.curriculum.seed, tmpdir=self.tmpdir, shuffle=self.shuffle).restore(state.datasets[dataset.name])
+            dataset.name: self._reader_impl(dataset, self.curriculum.seed, tmpdir=self.tmpdir, shuffle=self.shuffle, num_fields=self.num_fields).restore(state.datasets[dataset.name])
             for dataset in self.curriculum.datasets.values()
         }
         self.epoch_tracker = EpochTracker(self.readers[self.stage.until_dataset]).restore(state.epoch_tracker_state)
@@ -797,7 +823,9 @@ def main() -> None:
         if missing_files:
             raise ValueError(f"Dataset '{dataset.name}' is missing files: {missing_files}")
 
-    trainer = Trainer(curriculum, reader=DatasetReader if args.sync else AsyncDatasetReader, tmpdir=args.temporary_directory, shuffle=args.shuffle)
+    trainer = Trainer(curriculum, reader=DatasetReader if args.sync else AsyncDatasetReader,\
+                       tmpdir=args.temporary_directory, shuffle=args.shuffle, \
+                        num_fields=config['num_fields'] if 'num_fields' in config else None)
 
     state_tracker = StateTracker(args.state or f'{args.config}.state', restore=not args.do_not_resume)
 
