@@ -11,13 +11,10 @@ import random
 import subprocess
 import time
 
-from abc import ABC, abstractmethod
 from dataclasses import dataclass
-from enum import Enum
-from typing import List, Tuple, Dict, Set, Any, Optional, Union, Type, TextIO, cast, Iterable, Literal, Iterable, Callable, TypeVar, get_type_hints, get_args, get_origin
+from typing import List, Tuple, Dict, Any, Optional, Union, Type, TextIO, cast, Iterable, Iterable, Callable, TypeVar, get_type_hints, get_args, get_origin
 from tempfile import TemporaryFile
 from itertools import islice
-from functools import partial
 from pathlib import Path
 
 import yaml
@@ -219,12 +216,10 @@ class DatasetReader:
         return self
 
     def __next__(self) -> str:
-        just_opened = False
         if not self._fh or self._fh.closed:
             self._open() # TODO: do we want to do this lazy? Yes, restore()
                          # might be called twice right now and shuffling is
                          # expensive.
-            just_opened = True
 
         assert self._fh is not None
         line = self._next_line
