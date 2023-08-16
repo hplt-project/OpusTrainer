@@ -210,12 +210,15 @@ class DatasetReader:
                 if self._next_line == '':
                     raise StopIteration
 
+                # We can't call the function inside the string format prior to python 3.12
+                # so we will have it here instead so that we can refer to it when logging if necessary.
+                original_line: str = self._next_line.rstrip('\r\n')
+
                 # Assert that the line is well formed, meaning non of the fields is the empty string
                 # If not, try to get a new line from the corpus
-                fields: List[str] = self._next_line.rstrip('\r\n').split('\t')
+                fields: List[str] = original_line.split('\t')
                 if any(field == '' for field in fields):
-                    myline: str = self._next_line.rstrip('\r\n') # We can't call the function inside the string format prior to python 3.12
-                    logger.log_once(f"[Trainer] Empty field in {self.dataset.name} line: \"{myline}\", skipping...", loglevel="WARNING")
+                    logger.log_once(f"[Trainer] Empty field in {self.dataset.name} line: \"{original_line}\", skipping...", loglevel="WARNING")
                     continue
 
                 # Try to see if we have the right number of fields and remove lines
@@ -227,7 +230,6 @@ class DatasetReader:
                         self._next_line = '\t'.join(fields[:self.num_fields]) + '\n'
                         return
                     elif len(fields) < self.num_fields:
-                        original_line = self._next_line.rstrip('\r\n') # We can't call the function inside the string format prior to python 3.12
                         logger.log_once(f"[Trainer] Expected {self.num_fields} fields in {self.dataset.name} line: \"{original_line}\" but only got {len(fields)}, skipping...", loglevel="WARNING")
                         continue
 
@@ -555,7 +557,7 @@ class CurriculumV1Loader:
                     return self._dynamic_cast_parameter(subtype, value, basepath)
                 except err:
                     attempt_errors += f'could not cast to {subtype!r}: {err!s}\n'
-            raise ValueError(attempts)
+            raise ValueError(attempt_errors)
         elif typedef == Path:
             return Path(basepath).joinpath(value)
         elif typedef == type(None) and value is None:
