@@ -90,8 +90,12 @@ modifiers:
 - TitleCase: 0.05
 
 seed: 1111
+num_fields: 2 # Assures every line has exactly 2 fields.
 trainer: /path/to/trainer/run.py
 ```
+
+### Number of fields
+If `num_fields` is provided, at read time, the trainer will strip any extra TSV fields that the dataset contains (such as optinal alignment field that you are not going to use). Furthermore, any line that doesn't have enough fields gets filtered (eg lines missing alignment info when you do actually care about alignment).
 
 ### Extended stage configuration
 If you want to change which modifiers are used for a specific stage, you can the extended stage configuration format. If a `modifiers` is mentioned here, it will override the curriculum-wide defined `modifiers` for just this stage.

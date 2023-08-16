@@ -11,13 +11,10 @@ import random
 import subprocess
 import time
 
-from abc import ABC, abstractmethod
 from dataclasses import dataclass
-from enum import Enum
-from typing import List, Tuple, Dict, Set, Any, Optional, Union, Type, TextIO, cast, Iterable, Literal, Iterable, Callable, TypeVar, get_type_hints, get_args, get_origin
+from typing import List, Tuple, Dict, Any, Optional, Union, Type, TextIO, cast, Iterable, Iterable, Callable, TypeVar, get_type_hints, get_args, get_origin
 from tempfile import TemporaryFile
 from itertools import islice
-from functools import partial
 from pathlib import Path
 
 import yaml
@@ -79,6 +76,10 @@ class Curriculum:
     modifiers: List[Modifier]
     stages_order: List[str]
 
+    # Optionally, check how many fields each row of the datasets should have
+    # Too many should select the N first fields. Too few should drop the row.
+    num_fields: Optional[int]
+
     def __post_init__(self):
         if len(self.stages) != len(frozenset(self.stages)):
             raise ValueError('stages can only occur once')
@@ -116,13 +117,15 @@ class DatasetReader:
     line: int
     epoch: int
     shuffle: bool
+    num_fields: Optional[int]
 
     tmpdir: Optional[str]
 
     _fh: Optional[TextIO] = None
     _next_line: str
 
-    def __init__(self, dataset:Dataset, seed:int, tmpdir:Optional[str]=None, shuffle:bool=True):
+    def __init__(self, dataset:Dataset, seed:int, tmpdir:Optional[str]=None, shuffle:bool=True,
+                 num_fields:Optional[int]=None):
         """
         Parameters
         ----------
@@ -134,6 +137,9 @@ class DatasetReader:
             Path to directory in which the temporary shuffled dataset is written (default is `tempfile.gettempdir()`)
         shuffle : bool
             Indicates whether shuffling should happen. Enabled by default.
+        num_fields: int, optional
+            Optionally specify the number of fields each line should have. Trim to the required number if they are
+            more than the necessary fields, or remove lines that don't have the required number of fields.
         """
         self.dataset = dataset
         self.seed = seed
@@ -141,6 +147,7 @@ class DatasetReader:
         self.epoch = 0
         self.line = 0
         self.shuffle = shuffle
+        self.num_fields = num_fields
 
     def state(self) -> DatasetState:
         return DatasetState(self.seed, self.line, self.epoch)
@@ -203,11 +210,28 @@ class DatasetReader:
                 if self._next_line == '':
                     raise StopIteration
 
+                # We can't call the function inside the string format prior to python 3.12
+                # so we will have it here instead so that we can refer to it when logging if necessary.
+                original_line: str = self._next_line.rstrip('\r\n')
+
                 # Assert that the line is well formed, meaning non of the fields is the empty string
                 # If not, try to get a new line from the corpus
-                if any(field == '' for field in self._next_line.rstrip('\r\n').split('\t')):
-                    logger.log_once(f"[Trainer] Empty field in {self.dataset.name} line:\"{line}\", skipping...", loglevel="WARNING")
+                fields: List[str] = original_line.split('\t')
+                if any(field == '' for field in fields):
+                    logger.log_once(f"[Trainer] Empty field in {self.dataset.name} line: \"{original_line}\", skipping...", loglevel="WARNING")
                     continue
+
+                # Try to see if we have the right number of fields and remove lines
+                # that don't have all the fields or remove extra fields.
+                if self.num_fields is not None:
+                    if len(fields) == self.num_fields:
+                        return
+                    elif len(fields) > self.num_fields:
+                        self._next_line = '\t'.join(fields[:self.num_fields]) + '\n'
+                        return
+                    elif len(fields) < self.num_fields:
+                        logger.log_once(f"[Trainer] Expected {self.num_fields} fields in {self.dataset.name} line: \"{original_line}\" but only got {len(fields)}, skipping...", loglevel="WARNING")
+                        continue
 
                 return
         except StopIteration:
@@ -219,12 +243,10 @@ class DatasetReader:
         return self
 
     def __next__(self) -> str:
-        just_opened = False
         if not self._fh or self._fh.closed:
             self._open() # TODO: do we want to do this lazy? Yes, restore()
                          # might be called twice right now and shuffling is
                          # expensive.
-            just_opened = True
 
         assert self._fh is not None
         line = self._next_line
@@ -378,7 +400,8 @@ class CurriculumV1Loader:
             datasets=datasets,
             stages_order=stages_order,
             stages=self._load_stages(ymldata, basepath, stages_order, datasets),
-            modifiers=self._load_modifiers(ymldata, basepath)
+            modifiers=self._load_modifiers(ymldata, basepath),
+            num_fields=int(ymldata['num_fields']) if 'num_fields' in ymldata else None
         )
 
     def _load_datasets(self, ymldata:dict, basepath:str) -> Dict[str,Dataset]:
@@ -518,7 +541,7 @@ class CurriculumV1Loader:
                 try:
                     value = self._dynamic_cast_parameter(hints[name], value, basepath)
                 except Exception as exc:
-                    raise CurriculumLoaderErrorf(f"could not convert '{name}' to the correct type: {exc!s}") from exc
+                    raise CurriculumLoaderError(f"could not convert '{name}' to the correct type: {exc!s}") from exc
             args[name] = value
         
         return args
@@ -534,7 +557,7 @@ class CurriculumV1Loader:
                     return self._dynamic_cast_parameter(subtype, value, basepath)
                 except err:
                     attempt_errors += f'could not cast to {subtype!r}: {err!s}\n'
-            raise ValueError(attempts)
+            raise ValueError(attempt_errors)
         elif typedef == Path:
             return Path(basepath).joinpath(value)
         elif typedef == type(None) and value is None:
@@ -617,7 +640,8 @@ class Trainer:
     # Reader class to use (I.e. DatasetReader or AsyncDatasetReader)
     _reader_impl: Type[DatasetReader]
 
-    def __init__(self, curriculum:Curriculum, *, reader:Type[DatasetReader] = DatasetReader, tmpdir:Optional[str]=None, shuffle:bool=True):
+    def __init__(self, curriculum:Curriculum, *, reader:Type[DatasetReader] = DatasetReader, \
+                 tmpdir:Optional[str]=None, shuffle:bool=True):
         self.curriculum = curriculum
         self.tmpdir = tmpdir
         self.shuffle = shuffle
@@ -641,7 +665,11 @@ class Trainer:
         random.setstate(state.random_state)
         self.stage = self.curriculum.stages[state.stage]
         self.readers = {
-            dataset.name: self._reader_impl(dataset, self.curriculum.seed, tmpdir=self.tmpdir, shuffle=self.shuffle).restore(state.datasets[dataset.name])
+            dataset.name: self._reader_impl(dataset, self.curriculum.seed,
+                tmpdir=self.tmpdir,
+                shuffle=self.shuffle,
+                num_fields=self.curriculum.num_fields
+            ).restore(state.datasets[dataset.name])
             for dataset in self.curriculum.datasets.values()
         }
         self.epoch_tracker = EpochTracker(self.readers[self.stage.until_dataset]).restore(state.epoch_tracker_state)
@@ -802,7 +830,10 @@ def main() -> None:
         if missing_files:
             raise ValueError(f"Dataset '{dataset.name}' is missing files: {missing_files}")
 
-    trainer = Trainer(curriculum, reader=DatasetReader if args.sync else AsyncDatasetReader, tmpdir=args.temporary_directory, shuffle=args.shuffle)
+    trainer = Trainer(curriculum,
+        reader=DatasetReader if args.sync else AsyncDatasetReader,
+        tmpdir=args.temporary_directory,
+        shuffle=args.shuffle)
 
     state_tracker = StateTracker(args.state or f'{args.config}.state', restore=not args.do_not_resume)
 

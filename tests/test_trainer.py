@@ -14,6 +14,7 @@ from itertools import chain
 import yaml
 
 from opustrainer.trainer import Curriculum, CurriculumLoaderError, Dataset, DatasetReader, AsyncDatasetReader, CurriculumLoader, Trainer, StateTracker, Stage
+from opustrainer.logger import log_once
 
 TEST_FILE: str
 
@@ -365,3 +366,45 @@ class TestCurriculumLoader(unittest.TestCase):
 				self.assertRegex(logger_ctx.output[0], r'Exception while processing line, skipping:')
 				# Assert that we got the specific error as well
 				self.assertRegex(logger_ctx.output[0], r'ValueError: Out-of-bound alignment pairs')
+
+	def test_num_fields(self):
+		"""Tests the num field limiter"""
+		with tempfile.NamedTemporaryFile('w', encoding='utf-8') as fd:
+			fd.write('This is a test\tDas ist ein Test\t0-0 1-1 2-2 3-3\n')
+			fd.write('This is a test\tDas ist ein Test\t0-0 1-1 2-2 3-3\textra fields\n')
+			fd.write('Hello world\tHallo Welt\n') # Not enough fields
+			fd.flush()
+
+			config = {
+				'datasets': {
+					'clean': fd.name,
+				},
+				'stages': [
+					'start'
+				],
+				'start': [
+					'clean 1.0',
+					'until clean 1'
+				],
+				'seed': 1,
+				'num_fields': 3
+			}
+			curriculum = CurriculumLoader().load(config)
+
+			for reader in [DatasetReader, AsyncDatasetReader]:
+				with self.subTest(reader=reader.__name__), \
+				 self.assertLogs(level='WARNING') as logger_ctx, \
+				 closing(Trainer(curriculum, reader=reader)) as trainer:
+					# Reset the log_once cache
+					log_once.cache_clear()
+
+					output = list(chain.from_iterable(trainer.run(batch_size=1)))
+					# Assert we skipped the line
+					self.assertEqual(len(output), 2)
+					# Assert we properly cropped the lines and left the others unchanged
+					self.assertEqual(output, [
+						'This is a test\tDas ist ein Test\t0-0 1-1 2-2 3-3\n',
+						'This is a test\tDas ist ein Test\t0-0 1-1 2-2 3-3\n'
+					])
+					# Assert that we got an error message for one line
+					self.assertRegex(logger_ctx.output[0], r'\[Trainer\] Expected 3 fields in clean line:')
