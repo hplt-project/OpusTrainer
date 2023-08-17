@@ -62,4 +62,4 @@ def setup_logger(outputfilename: Optional[str] = None, loglevel: str = "INFO", d
     # even if it has already been shutdown. This is why we use force=True to force recreation of logger so we can
     # properly run our tests. Not the best solution, not sure if it's not prone to race conditions, but it is
     # at the very least safe to use for the actual software running
-    logging.basicConfig(handlers=handlers, level=get_log_level(loglevel), format=loggingformat, datefmt='%Y-%m-%d %H:%M:%S', force=True, **kwargs)
+    logging.basicConfig(handlers=handlers, level=get_log_level(loglevel), format=loggingformat, datefmt='%Y-%m-%d %H:%M:%S', force=True)
