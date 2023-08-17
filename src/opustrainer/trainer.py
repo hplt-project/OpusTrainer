@@ -204,7 +204,7 @@ class DatasetReader:
         try:
             # Try to find the next non-empty line
             while True:
-                self._next_line = self._fh.readline()
+                self._next_line = self._fh.readline() if self._fh is not None else "" # Make linter happy
 
                 # Empty return, not even a line ending, means EOF
                 if self._next_line == '':
@@ -235,7 +235,7 @@ class DatasetReader:
 
                 return
         except StopIteration:
-            self._fh.close()
+            self._fh.close() if self._fh is not None else None # Make Linter happy
             self.seed += 1
             self.epoch += 1
 
@@ -548,14 +548,14 @@ class CurriculumV1Loader:
 
     T = TypeVar('T')
 
-    def _dynamic_cast_parameter(self, typedef:Type[T], value:Any, basepath:str) -> T:
+    def _dynamic_cast_parameter(self, typedef:Type[T], value:Any, basepath:str) -> Union[T, None, Path]:
         """Casts `value` into a type that matches `typedef`. Can deal with `Union`."""
         if get_origin(typedef) == Union:
             attempt_errors = ''
             for subtype in get_args(typedef):
                 try:
                     return self._dynamic_cast_parameter(subtype, value, basepath)
-                except err:
+                except Exception as err:
                     attempt_errors += f'could not cast to {subtype!r}: {err!s}\n'
             raise ValueError(attempt_errors)
         elif typedef == Path:
@@ -622,7 +622,8 @@ def try_trace_map(fn: Callable[[In], Out], items: Iterable[In]) -> Iterable[Out]
             yield fn(item)
         except Exception as exc:
             logger.log(f'Exception while processing line, skipping: {item!r}', 'WARNING',
-                exc_info=(type(exc), exc, exc.__traceback__.tb_next)) # skip fn(item) frame
+                exc_info=(type(exc), exc, # skip fn(item) frame.
+                          exc.__traceback__.tb_next if exc.__traceback__ else None)) # Make linter happy
 
 
 class Trainer:
