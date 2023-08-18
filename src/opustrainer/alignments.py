@@ -2,12 +2,12 @@ from typing import Optional, List
 from opustrainer.types import Pair, TokenList
 
 
-def parse_alignments(pairs:str, src_tokens:Optional[TokenList]=None, trg_tokens:Optional[TokenList]=None) -> List[Pair]:
+def parse_alignments(input_pairs:str, src_tokens:Optional[TokenList]=None, trg_tokens:Optional[TokenList]=None) -> List[Pair]:
     """Parses `1-2 3-4` into `[Pair(src=1,trg=2), Pair(src=3,trg=4)]`. If `src_tokens` and
     `trg_tokens` are supplied, it will also check that the indices are not out of bounds."""
-    pairs = [
+    pairs: List[Pair] = [
         Pair(int(a), int(b)) for a, b in
-        (pair.split('-', maxsplit=1) for pair in pairs.split())
+        (pair.split('-', maxsplit=1) for pair in input_pairs.split())
     ]
 
     if src_tokens is not None and trg_tokens is not None:

@@ -66,8 +66,8 @@ class MosesTokenizer:
         self.tokenizer = sacremoses.MosesTokenizer(lang, custom_nonbreaking_prefixes)
 
     def tokenize(self, text:str) -> Tuple[TokenList, TokenSpanList]:
-        tokens = self.tokenizer.tokenize(text, escape=False)
-        spans: TokenSpanList = []
+        tokens:TokenList = self.tokenizer.tokenize(text, escape=False) # type: ignore
+        spans: TokenSpanList = [] # ^tokenizer.tokenize always returns a string unless return_string=True (which is not)
         offset = 0
         for token in tokens:
             offset = text.find(token, offset)
@@ -103,7 +103,7 @@ class SentencePieceTokenizer:
     spm: SentencePieceProcessor
 
     def __init__(self, vocab:Path):
-        self.spm = SentencePieceProcessor(str(vocab))
+        self.spm = SentencePieceProcessor(model_file=str(vocab)) # type: ignore # for some reason pylance doesn't understand spm.
 
     def tokenize(self, text:str) -> Tuple[TokenList,TokenSpanList]:
         # interestingly, piece.begin and piece.end are unicode offsets, not byte
@@ -121,7 +121,7 @@ class SentencePieceTokenizer:
         #   '🤣'
         spans = [
             slice(piece.begin, piece.end)
-            for piece in self.spm.encode(text.encode(), out_type='immutable_proto').pieces
+            for piece in self.spm.encode(text.encode(), out_type='immutable_proto').pieces # type: ignore
         ]
         tokens = [text[span] for span in spans]
         return tokens, spans

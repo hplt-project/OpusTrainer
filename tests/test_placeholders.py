@@ -45,7 +45,7 @@ class TestTagger(unittest.TestCase):
       probability=0.25,
       custom_detok_src='en',
       custom_detok_trg='zh',
-      spm_vocab='contrib/test-data/vocab.zhen.spm')
+      spm_vocab='contrib/test-data/vocab.zhen.spm') # type: ignore Path vs String type issue
     
     output = tagger('\t'.join([
       'This is a simple test statement 🤣 .',
@@ -85,7 +85,7 @@ class TestTagger(unittest.TestCase):
       probability=0.0,
       custom_detok_src='en',
       custom_detok_trg='zh',
-      spm_vocab='contrib/test-data/vocab.zhen.spm')
+      spm_vocab='contrib/test-data/vocab.zhen.spm') # type: ignore Path vs String type issue
     
     output = tagger('\t'.join([
       'This is a simple test statement 🤣 .',
