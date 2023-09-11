@@ -15,7 +15,7 @@ import time
 from dataclasses import dataclass
 from typing import List, Tuple, Dict, Any, Optional, Union, Type, TextIO, cast, Iterable, Iterable, Callable, TypeVar, get_type_hints, get_args, get_origin
 from tempfile import TemporaryFile
-from itertools import islice
+from itertools import islice, count
 from pathlib import Path
 from multiprocessing import Queue, Process
 
@@ -641,12 +641,13 @@ class ModifierWorker(Process):
             if task is None:
                 break
 
-            id, seed, batch = task
+            id, seeds, batch = task
 
-            random.seed(seed)
-
-            for modifier in self.modifiers:
-                batch = list(try_trace_map(lambda line: modifier(line.rstrip('\r\n')) + '\n', batch))
+            for i, seed, line in zip(count(), seeds, batch):
+                random.seed(seed)
+                for modifier in self.modifiers:
+                    line = modifier(line.rstrip('\r\n')) + '\n'
+                batch[i] = line
 
             self.results.put((id, batch))
 
@@ -688,7 +689,11 @@ class ModifierPool:
         )
 
         for n in range(n_tasks + (1 if remainder > 0 else 0)):
-            self.tasks.put((n, random.random(), batch[task_slice(n)]))
+            self.tasks.put((
+                n,
+                tuple(random.random() for _ in batch[task_slice(n)]),
+                batch[task_slice(n)],
+            ))
 
         for _ in range(n_tasks + (1 if remainder > 0 else 0)):
             n, result = self.results.get()
