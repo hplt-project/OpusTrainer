@@ -627,7 +627,13 @@ def try_trace_map(fn: Callable[[In], Out], items: Iterable[In]) -> Iterable[Out]
                 exc_info=(type(exc), exc, # skip fn(item) frame.
                           exc.__traceback__.tb_next)) # type: ignore # __traceback__ can't be None.
 
+
 class ModifierWorker(Process):
+    """Process that runs batches of sentences through a list of modifiers"""
+    tasks: Queue
+    results: Queue
+    modifiers: List[Modifier]
+
     def __init__(self, tasks:Queue, results:Queue, modifiers:List[Modifier], **kwargs):
         super().__init__(**kwargs)
         self.tasks = tasks
@@ -650,9 +656,19 @@ class ModifierWorker(Process):
                 batch[i] = line
 
             self.results.put((id, batch))
+        self.results.close()
 
 
 class ModifierPool:
+    """Pool of ModifierWorker that exposes `map()` to run a batch of sentences
+    through a predefined list of modifiers. Similar to multiprocessing.Pool
+    except that the `func` argument doesn't need to be passed for each call.
+    """
+    workers: int
+    modifiers: List[Modifier]
+    tasks: Queue
+    results: Queue
+
     def __init__(self, processes:int, modifiers:List[Modifier]):
         self.workers = processes
         self.modifiers = modifiers
@@ -674,6 +690,7 @@ class ModifierPool:
         # Tell workers to stop
         for _ in self.processes:
             self.tasks.put(None)
+        self.tasks.close()
 
         # Wait for workers to close down
         for process in self.processes:
