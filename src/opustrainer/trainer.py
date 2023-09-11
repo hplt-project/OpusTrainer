@@ -9,6 +9,7 @@ import signal
 import argparse
 import random
 import subprocess
+import shlex
 import time
 
 from dataclasses import dataclass
@@ -842,7 +843,7 @@ def main() -> None:
     signal.signal(signal.SIGUSR1, lambda signum, handler: print_state(trainer.state()))
 
     model_trainer = subprocess.Popen(
-        args.trainer or config['trainer'],
+        args.trainer or shlex.split(config['trainer']),
         stdin=subprocess.PIPE,
         encoding="utf-8",
         preexec_fn=ignore_sigint) # ignore_sigint makes marian ignore Ctrl-C. We'll stop it from here.
