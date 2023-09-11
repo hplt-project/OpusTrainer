@@ -17,6 +17,7 @@ from typing import List, Tuple, Dict, Any, Optional, Union, Type, TextIO, cast, 
 from tempfile import TemporaryFile
 from itertools import islice
 from pathlib import Path
+from multiprocessing import Queue, Process
 
 import yaml
 
@@ -626,6 +627,75 @@ def try_trace_map(fn: Callable[[In], Out], items: Iterable[In]) -> Iterable[Out]
                 exc_info=(type(exc), exc, # skip fn(item) frame.
                           exc.__traceback__.tb_next)) # type: ignore # __traceback__ can't be None.
 
+class ModifierWorker(Process):
+    def __init__(self, tasks:Queue, results:Queue, modifiers:List[Modifier], **kwargs):
+        super().__init__(**kwargs)
+        self.tasks = tasks
+        self.results = results
+        self.modifiers = modifiers
+        
+    def run(self):
+        while True:
+            task = self.tasks.get()
+
+            if task is None:
+                break
+
+            id, seed, batch = task
+
+            random.seed(seed)
+
+            for modifier in self.modifiers:
+                batch = list(try_trace_map(lambda line: modifier(line.rstrip('\r\n')) + '\n', batch))
+
+            self.results.put((id, batch))
+
+
+class ModifierPool:
+    def __init__(self, processes:int, modifiers:List[Modifier]):
+        self.workers = processes
+        self.modifiers = modifiers
+        self.tasks = Queue()
+        self.results = Queue()
+
+    def __enter__(self) -> 'ModifierPool':
+        self.processes = [
+            ModifierWorker(self.tasks, self.results, self.modifiers, daemon=True)
+            for _ in range(self.workers)
+        ]
+
+        for process in self.processes:
+            process.start()
+
+        return self
+
+    def __exit__(self, *args):
+        # Tell workers to stop
+        for _ in self.processes:
+            self.tasks.put(None)
+
+        # Wait for workers to close down
+        for process in self.processes:
+            process.join()
+
+    def map(self, batch:List[str]) -> List[str]:
+        task_size = len(self.processes)
+        n_tasks, remainder = divmod(len(batch), task_size)
+
+        task_slice = lambda n: slice(
+            n * task_size,
+            n * task_size + (task_size if n < n_tasks else remainder)
+        )
+
+        for n in range(n_tasks + (1 if remainder > 0 else 0)):
+            self.tasks.put((n, random.random(), batch[task_slice(n)]))
+
+        for _ in range(n_tasks + (1 if remainder > 0 else 0)):
+            n, result = self.results.get()
+            batch[task_slice(n)] = result
+
+        return batch
+
 
 class Trainer:
     """Writes lines to a trainer program according to the curriculum."""
@@ -639,14 +709,18 @@ class Trainer:
     # For debugging purposes, whether to shuffle or not
     shuffle:bool
 
+    # Number of workers in the processing pool
+    workers:int
+
     # Reader class to use (I.e. DatasetReader or AsyncDatasetReader)
     _reader_impl: Type[DatasetReader]
 
     def __init__(self, curriculum:Curriculum, *, reader:Type[DatasetReader] = DatasetReader, \
-                 tmpdir:Optional[str]=None, shuffle:bool=True):
+                 tmpdir:Optional[str]=None, shuffle:bool=True, workers:Optional[int]=None):
         self.curriculum = curriculum
         self.tmpdir = tmpdir
         self.shuffle = shuffle
+        self.workers = workers or os.cpu_count() or 1
         self._reader_impl = reader
         random.seed(self.curriculum.seed)
         first_stage_name = self.curriculum.stages_order[0]
@@ -711,32 +785,32 @@ class Trainer:
         """Yield batches, moving through the stages of training as datasets are consumed."""
         while self.stage is not None:
             logger.log(f"Starting stage {self.stage.name}")
-            while self.stage.until_epoch is None or self.epoch_tracker.epoch < self.stage.until_epoch:
-                batch: List[str] = []
+            # Stage level modifiers take precedence over global modifiers,
+            # but you can combine them yourself using YAML references.
+            if self.stage.modifiers is not None:
+                modifiers = self.stage.modifiers
+            else:
+                modifiers = self.curriculum.modifiers
 
-                # Read from each dataset according to its weight in this stage
-                # (They will reshuffle and repeat if necessary)
-                for dataset, weight in self.stage.datasets:
-                    batch.extend(islice(self.readers[dataset.name], 0, int(batch_size * weight)))
+            with ModifierPool(self.workers, modifiers) as pool:
+                while self.stage.until_epoch is None or self.epoch_tracker.epoch < self.stage.until_epoch:
+                    batch: List[str] = []
 
-                # Stage level modifiers take precedence over global modifiers,
-                # but you can combine them yourself using YAML references.
-                if self.stage.modifiers is not None:
-                    modifiers = self.stage.modifiers
-                else:
-                    modifiers = self.curriculum.modifiers
+                    # Read from each dataset according to its weight in this stage
+                    # (They will reshuffle and repeat if necessary)
+                    for dataset, weight in self.stage.datasets:
+                        batch.extend(islice(self.readers[dataset.name], 0, int(batch_size * weight)))
 
-                # Apply any modifiers to random lines in the batch, or sentence
-                # (Multiple modifiers can be applied to the same line!)
-                for modifier in modifiers:
-                    batch = list(try_trace_map(lambda line: modifier(line.rstrip('\r\n')) + '\n', batch))
+                    # Apply any modifiers to random lines in the batch, or sentence
+                    # (Multiple modifiers can be applied to the same line!)
+                    batch = pool.map(batch)
 
-                if self.shuffle:
-                    random.shuffle(batch)
+                    if self.shuffle:
+                        random.shuffle(batch)
 
-                # Tell anyone whose listening that something interesting happened
-                # TODO: Yield something useful, e.g. progress.
-                yield batch
+                    # Tell anyone whose listening that something interesting happened
+                    # TODO: Yield something useful, e.g. progress.
+                    yield batch
 
             # Move onto next stage. May be `None`, which would end this generator
             self.next_stage()
@@ -814,6 +888,7 @@ def main() -> None:
     parser.add_argument("--do-not-resume", '-d', action="store_true", help='Do not resume from the previous training state')
     parser.add_argument("--no-shuffle", '-n', action="store_false", help='Do not shuffle, for debugging', dest="shuffle")
     parser.add_argument("--batch-size", '-b', type=int, default=100, help='Batch size')
+    parser.add_argument("--workers", '-j', type=int, default=os.cpu_count() or 1, help='Number of workers')
     parser.add_argument("--log-level", type=str, default="INFO", help="Set log level. Available levels: DEBUG, INFO, WARNING, ERROR, CRITICAL. Default is INFO")
     parser.add_argument("--log-file", '-l', type=str, default=None, help="Target location for logging. Always logs to stderr and optionally to a file.")
     parser.add_argument("trainer", type=str, nargs=argparse.REMAINDER, help="Trainer program that gets fed the input. If empty it is read from config.")
@@ -835,7 +910,8 @@ def main() -> None:
     trainer = Trainer(curriculum,
         reader=DatasetReader if args.sync else AsyncDatasetReader,
         tmpdir=args.temporary_directory,
-        shuffle=args.shuffle)
+        shuffle=args.shuffle,
+        workers=args.workers)
 
     state_tracker = StateTracker(args.state or f'{args.config}.state', restore=not args.do_not_resume)
 
