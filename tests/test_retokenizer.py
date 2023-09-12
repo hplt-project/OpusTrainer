@@ -6,6 +6,10 @@ from opustrainer.modifiers.retokenize import RetokenizeModifier
 VOCAB = 'contrib/test-data/vocab.zhen.spm'
 
 
+def first(it):
+  return next(iter(it))
+
+
 class TestTokenizer(unittest.TestCase):
   maxDiff = None
 
@@ -22,7 +26,7 @@ class TestTokenizer(unittest.TestCase):
       '0-1 1-0 2-2 3-3 4-6 5-7 6-8 7-9',
     ]
 
-    self.assertEqual(tokenizer('\t'.join(test_pair)).split('\t'), test_pair)
+    self.assertEqual(first(tokenizer(['\t'.join(test_pair)])).split('\t'), test_pair)
 
   def test_multiple_spaces(self):
     """Spaces tokenizer should have no impact on the output, but it will 
@@ -43,21 +47,21 @@ class TestTokenizer(unittest.TestCase):
       '0-1 1-0 2-2 3-3 4-6 5-7 6-8 7-9',
     ]
 
-    self.assertEqual(tokenizer('\t'.join(test_pair)).split('\t'), ref_pair)
+    self.assertEqual(first(tokenizer(['\t'.join(test_pair)])).split('\t'), ref_pair)
 
   def test_retokenize(self):
     tokenizer = RetokenizeModifier(
       src=dict(detokenize='moses:en', tokenize=f'spm:{VOCAB}'),
       trg=dict(detokenize='moses:zh', tokenize=f'spm:{VOCAB}'))
 
-    out = tokenizer('\t'.join([
+    out = tokenizer(['\t'.join([
       'This is a simple test statement 🤣 .',
       #^0   ^1 ^2 ^3    ^4   ^5        ^6 ^7
       '这 是 一个 简单 的 测试 语 句 🤣 。',
       #^0 ^1 ^2  ^3   ^4 ^5   ^6 ^7 ^8 ^9
       '0-0 1-1 2-2 3-3 3-4 4-5 5-6 5-7 6-8 7-9',
-    ]))
-    self.assertEqual(out, '\t'.join([
+    ])])
+    self.assertEqual(first(out), '\t'.join([
       'This is a simple test statement 🤣.',
       #[This][ is][ a][ simple][ test][ statement][ ][] [] [] [🤣][.]
       #^0    ^1   ^2  ^3       ^4     ^5          ^6 ^7 ^8 ^9 ^10 ^11 

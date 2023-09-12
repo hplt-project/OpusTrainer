@@ -1,5 +1,4 @@
-from typing import List, Protocol, Dict, NamedTuple, TypeVar, Callable, Union, Tuple, Optional, Any
-from itertools import count
+from typing import List, Dict, NamedTuple, Tuple, Iterable
 
 from opustrainer.types import Pair, TokenList, TokenMapping, Tokenizer, Detokenizer
 from opustrainer.alignments import parse_alignments, format_alignments
@@ -110,13 +109,16 @@ class RetokenizeModifier(Modifier):
         self.src = make_retokenizer(src)
         self.trg = make_retokenizer(trg)
 
-    def __call__(self, line:str) -> str:
-        src, trg, alignments = line.split('\t')
-        src_tokens = src.split()
-        trg_tokens = trg.split()
-        pairs = parse_alignments(alignments, src_tokens, trg_tokens)
-        new_src, new_src_tokens, src_mapping = self.src.retokenize(src_tokens)
-        new_trg, new_trg_tokens, trg_mapping = self.trg.retokenize(trg_tokens)
-        remapped_pairs = remap_alignment_pairs(src_mapping, trg_mapping, pairs)
-        return '\t'.join((new_src, new_trg, format_alignments(remapped_pairs)))
-
+    def __call__(self, batch:List[str]) -> Iterable[str]:
+        for line in batch:
+            try:
+                src, trg, alignments = line.split('\t')
+                src_tokens = src.split()
+                trg_tokens = trg.split()
+                pairs = parse_alignments(alignments, src_tokens, trg_tokens)
+                new_src, _, src_mapping = self.src.retokenize(src_tokens)
+                new_trg, _, trg_mapping = self.trg.retokenize(trg_tokens)
+                remapped_pairs = remap_alignment_pairs(src_mapping, trg_mapping, pairs)
+                yield '\t'.join((new_src, new_trg, format_alignments(remapped_pairs)))
+            except Exception as exc:
+                logger.log(f'Exception while processing line, skipping line: {exc!r}', 'WARNING')

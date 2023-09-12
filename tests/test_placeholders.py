@@ -9,6 +9,10 @@ from opustrainer.trainer import CurriculumLoader
 from opustrainer import logger
 
 
+def first(it):
+  return next(iter(it))
+
+
 class TestTagger(unittest.TestCase):
   def setUp(self):
     random.seed(1)
@@ -17,26 +21,26 @@ class TestTagger(unittest.TestCase):
     """Default mode is tagging, and will hint the target word in the source input"""
     tagger = PlaceholderTagModifier(probability=1)
     tagger.print_alignments = True
-    output = tagger('Hello world\tHallo Welt\t0-0 1-1')
-    self.assertEqual(output, '__source__ Hello __target__ Hallo __done__ __source__ world __target__ Welt __done__\tHallo Welt\t1-0 3-0 6-1 8-1')
-    #                         ^0         ^1    ^2         ^3    ^4       ^5         ^6    ^7         ^8   ^9        ^0    ^1
+    output = tagger(['Hello world\tHallo Welt\t0-0 1-1'])
+    self.assertEqual(first(output), '__source__ Hello __target__ Hallo __done__ __source__ world __target__ Welt __done__\tHallo Welt\t1-0 3-0 6-1 8-1')
+    #                                ^0         ^1    ^2         ^3    ^4       ^5         ^6    ^7         ^8   ^9        ^0    ^1
 
   def test_tagger_replace(self):
     """Replace mode is the same as tagging mode, except that the target word
     will be random noise, teaching the model to just copy it as is."""
     tagger = PlaceholderTagModifier(probability=0.25, replace=1)
     tagger.print_alignments = True
-    output = tagger('Hello world\tHallo Welt\t0-0 1-1')
-    self.assertEqual(output, '''__source__ Hello __target__ িৡহ __done__ world\tিৡহ Welt\t1-0 3-0 5-1''')
-    #                           ^0         ^1    ^2         ^3   ^4       ^5      ^0   ^1
+    output = tagger(['Hello world\tHallo Welt\t0-0 1-1'])
+    self.assertEqual(first(output), '__source__ Hello __target__ িৡহ __done__ world\tিৡহ Welt\t1-0 3-0 5-1')
+    #                                ^0         ^1    ^2         ^3   ^4       ^5      ^0   ^1
 
   def test_tagger_augment(self):
     """Augment mode will add random noise without tags to both source and target
     sentence, teaching the model to copy strings it doesn't understand."""
     tagger = PlaceholderTagModifier(probability=1, augment=1)
     tagger.print_alignments = True
-    output = tagger('Hello world\tHallo Welt\t0-0 1-1')
-    self.assertEqual(output, '''Hello িৡহ world ЇӤӕѣѮ қӃӄЀҲ\tHallo িৡহ Welt ЇӤӕѣѮ қӃӄЀҲ\t0-0 1-1 2-2 3-3 4-4''')
+    output = tagger(['Hello world\tHallo Welt\t0-0 1-1'])
+    self.assertEqual(first(output), 'Hello িৡহ world ЇӤӕѣѮ қӃӄЀҲ\tHallo িৡহ Welt ЇӤӕѣѮ қӃӄЀҲ\t0-0 1-1 2-2 3-3 4-4')
 
   def test_retokenize(self):
     """Pass the spm vocab to the placeholder tag generator so that it can
@@ -47,14 +51,14 @@ class TestTagger(unittest.TestCase):
       custom_detok_trg='zh',
       spm_vocab='contrib/test-data/vocab.zhen.spm') # type: ignore Path vs String type issue
     
-    output = tagger('\t'.join([
+    output = tagger(['\t'.join([
       'This is a simple test statement 🤣 .',
       #^0   ^1 ^2 ^3    ^4   ^5        ^6 ^7
       '这 是 一个 简单 的 测试 语 句 🤣 。',
       #^0 ^1 ^2  ^3   ^4 ^5   ^6 ^7 ^8 ^9
       '0-0 1-1 2-2 3-3 3-4 4-5 5-6 5-7 6-8 7-9',
-    ]))
-    self.assertEqual(output.split('\t'), [
+    ])])
+    self.assertEqual(first(output).split('\t'), [
       '__source__ This __target__ 这 __done__ is a simple test statement 🤣.',
       # [][__source__][This][ ][__target__][这][ ][__done__][ is][ a][ simple][ test][ statement][ ] []  []  []  [🤣][.]
       #^0 ^1          ^2    ^3 ^4          ^5  ^6 ^7        ^8   ^9  ^10       ^11    ^12         ^13 ^14 ^15 ^16 ^17 ^18 
@@ -87,12 +91,12 @@ class TestTagger(unittest.TestCase):
       custom_detok_trg='zh',
       spm_vocab='contrib/test-data/vocab.zhen.spm') # type: ignore Path vs String type issue
     
-    output = tagger('\t'.join([
+    output = tagger(['\t'.join([
       'This is a simple test statement 🤣 .',
       '这 是 一个 简单 的 测试 语 句 🤣 。',
       '0-0 1-1 2-2 3-3 3-4 4-5 5-6 5-7 6-8 7-9',
-    ]))
-    self.assertEqual(output.split('\t'), [
+    ])])
+    self.assertEqual(first(output).split('\t'), [
       'This is a simple test statement 🤣.',
       #[This][ is][ a][ simple][ test][ statement][ ] [] [] [] [🤣][.]
       #^0    ^1   ^2  ^3       ^4     ^5          ^6  ^7 ^8 ^9 ^10 ^11 
@@ -135,8 +139,8 @@ class TestTagger(unittest.TestCase):
     ]
 
     for ref in refs:
-      output = tagger('\t'.join(example))
-      self.assertEqual(output, '\t'.join(ref))
+      output = tagger(['\t'.join(example)])
+      self.assertEqual(first(output), '\t'.join(ref))
 
   def test_warn_if_tag_modifier_is_not_last(self):
     with self.assertLogs(level='WARNING') as logger_ctx:
@@ -153,10 +157,12 @@ class TestTagger(unittest.TestCase):
 
   def test_exception_if_alignment_is_missing(self):
     tagger = PlaceholderTagModifier()
-    with self.assertRaises(IndexError):
-      tagger('Hello world\tHallo welt\t')
+    with self.assertLogs(level='WARNING') as logger_ctx:
+      self.assertEqual(list(tagger(['Hello world\tHallo welt\t'])), [])
+      self.assertIn('IndexError', logger_ctx.output[0])
 
   def test_exception_if_alignment_is_invalid(self):
     tagger = PlaceholderTagModifier()
-    with self.assertRaises(ValueError):
-      tagger('Hello world\tHallo welt\t0-0 1-2')
+    with self.assertLogs(level='WARNING') as logger_ctx:
+      self.assertEqual(list(tagger(['Hello world\tHallo welt\t0-0 1-2'])), [])
+      self.assertIn('ValueError', logger_ctx.output[0])

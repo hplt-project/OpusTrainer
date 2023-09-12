@@ -1,5 +1,5 @@
 import random
-from typing import List
+from typing import List, Iterable
 from opustrainer.modifiers import Modifier
 
 
@@ -29,7 +29,11 @@ class PrefixModifier(Modifier):
         self.max_words = max_words
         self.template = template
 
-    def __call__(self, line:str) -> str:
+    def __call__(self, batch:List[str]) -> Iterable[str]:
+        for line in batch:
+            yield self.apply(line)
+
+    def apply(self, line:str) -> str:
         """Takes a line in the form of "I like pie. Me gustan los pasteles."
            and turns it into: "__start__ los pasteles __end__ I like pie. Me
            gustan los pasteles."
