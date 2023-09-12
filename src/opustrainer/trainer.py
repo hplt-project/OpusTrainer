@@ -11,6 +11,7 @@ import random
 import subprocess
 import shlex
 import time
+import logging
 
 from dataclasses import dataclass
 from typing import List, Tuple, Dict, Any, Optional, Union, Type, TextIO, cast, Iterable, Iterable, Callable, TypeVar, get_type_hints, get_args, get_origin
@@ -18,6 +19,7 @@ from tempfile import TemporaryFile
 from itertools import islice, count
 from pathlib import Path
 from multiprocessing import Queue, Process
+from logging.handlers import QueueHandler, QueueListener
 
 import yaml
 
