@@ -16,7 +16,7 @@ import logging
 from dataclasses import dataclass
 from typing import List, Tuple, Dict, Any, Optional, Union, Type, TextIO, cast, Iterable, Iterable, Callable, TypeVar, get_type_hints, get_args, get_origin
 from tempfile import TemporaryFile
-from itertools import islice, count
+from itertools import islice, count, chain
 from pathlib import Path
 from multiprocessing import Queue, Process
 from logging.handlers import QueueHandler, QueueListener
@@ -641,7 +641,8 @@ class ModifierWorker(Process):
             if task is None:
                 break
 
-            id, seed, batch = task
+            # A task consists of a chunk id, batch seed, and lines
+            chunk, seed, batch = task
 
             try:
                 # Set random seed for this batch, so the worker and the order
@@ -651,9 +652,9 @@ class ModifierWorker(Process):
                 for modifier in self.modifiers:
                     batch = list(modifier(batch))
 
-                self.results.put((id, batch, None))
+                self.results.put((chunk, batch, None))
             except Exception as exc:
-                self.results.put((id, None, exc))
+                self.results.put((chunk, None, exc))
         self.results.close()
 
 
@@ -731,14 +732,18 @@ class ModifierPool:
         for chunk in range(chunks + (1 if remainder > 0 else 0)):
             self.tasks.put((chunk, random.random(), batch[chunk_slice(chunk)]))
 
-        # Retrieve results from workers, slicing the results back into the batch
+        # Placeholder for the returned chunks, in order
+        chunk_results = [[]] * (chunks + (1 if remainder > 0 else 0))
+
+        # Retrieve results from workers
         for _ in range(chunks + (1 if remainder > 0 else 0)):
             chunk, result, exc = self.results.get()
             if exc is not None:
                 raise exc
-            batch[chunk_slice(chunk)] = result
+            chunk_results[chunk] = result
 
-        return batch
+        # Stitch the ordered result chunks back together into a single batch
+        return list(chain(*chunk_results))
 
 
 class Trainer:
