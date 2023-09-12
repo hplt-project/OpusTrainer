@@ -11,11 +11,11 @@ class TitleCaseModifier(Modifier):
         for line in batch:
             if self.probability <= random.random():
                 yield line
-
-            sections: List[str] = line.split('\t')
-            for i in range(len(sections)):
-                sections[i] = ' '.join([word[0].upper() + word[1:] for word in sections[i].split()])
-            yield '\t'.join(sections)
+            else:
+                sections: List[str] = line.split('\t')
+                for i in range(len(sections)):
+                    sections[i] = ' '.join([word[0].upper() + word[1:] for word in sections[i].split()])
+                yield '\t'.join(sections)
 
 
 class UpperCaseModifier(Modifier):
