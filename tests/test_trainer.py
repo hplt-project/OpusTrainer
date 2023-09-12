@@ -215,10 +215,11 @@ class TestTrainer(unittest.TestCase):
 		
 		curriculum = CurriculumLoader().load(config)
 
-		# Reference batches (trainer runs without resuming)
+		# Run with one worker and default chunk size
 		with closing(Trainer(curriculum)) as trainer:
 			batches_linear = list(trainer.run(processes=1))
 
+		# Run with three workers, and default batch size
 		with closing(Trainer(curriculum)) as trainer:
 			batches_parallel = list(trainer.run(processes=4))
 
