@@ -23,13 +23,6 @@ jobs:
         run: pip install .
       - name: Run benchmark
         run: python contrib/benchmark.py > benchmark.json
-      # Download previous benchmark result from cache (if exists)
-      - name: Download previous benchmark data
-        uses: actions/cache/restore@v3
-        id: cache-benchmark-restore
-        with:
-          key: ${{ runner.os }}-benchmark
-          path: benchmark-data.json
       # Run `github-action-benchmark` action
       - name: Store benchmark result
         uses: benchmark-action/github-action-benchmark@v1
@@ -38,8 +31,6 @@ jobs:
           tool: 'customSmallerIsBetter'
           # Where the output from the benchmark tool is stored
           output-file-path: benchmark.json
-          # Where the previous data file is stored
-          external-data-json-path: benchmark-data.json
           # Workflow will fail when an alert happens
           fail-on-alert: true
           # GitHub API token to make a commit comment
@@ -50,10 +41,3 @@ jobs:
           summary-always: true
           # Only push benchmark if this is the main branch
           auto-push: ${{ github.ref == 'refs/heads/main' }}
-      - name: Save benchmark data
-        uses: actions/cache/save@v3
-        if: github.ref == 'refs/heads/main'
-        with:
-          path: benchmark-data.json
-          key: ${{ steps.cache-benchmark-restore.outputs.cache-primary-key }}
-      
