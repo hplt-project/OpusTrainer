@@ -14,12 +14,16 @@ INPUT_DATA = [
 ]
 
 
+def first(it):
+  return next(iter(it))
+
+
 class TestTypos(unittest.TestCase):
 	def test_typos(self):
 		"""Test modifier only alters column 0"""
 		random.seed(1)
 		modifier = TypoModifier(1.0)
-		output = [modifier("\t".join(line)).split("\t") for line in INPUT_DATA]
+		output = [line.split('\t') for line in modifier(["\t".join(line) for line in INPUT_DATA])]
 		# Assert first column is modified
 		self.assertEqual([row[0] for row in output], [
 			'This s a sentence.',
@@ -34,7 +38,7 @@ class TestTypos(unittest.TestCase):
 		"""Test each modifier is applied only once per sentence"""
 		random.seed(1)
 		modifier = TypoModifier(1.0, extra_char=1.0, random_space=1.0)
-		output = [modifier("\t".join(line)).split("\t") for line in INPUT_DATA]
+		output = [line.split('\t') for line in modifier(["\t".join(line) for line in INPUT_DATA])]
 		self.assertEqual([row[0] for row in output], [
 			'Tyhis  is a sentence.',
 			'W hy are we doing thjis?',
@@ -72,9 +76,9 @@ class TestTypos(unittest.TestCase):
 			batches = list(trainer.run())
 	
 		self.assertEqual(batches[0][:5], [
-			'cl ewan531\n',
-			'cole an739\n',
-			'cl esan742\n',
-			'clean2 580\n',
-			'c lsean741\n'
+			'cpl ean700\n',
+			'cleahn68 8\n',
+			'cle wan220\n',
+			'cl ean2841\n',
+			'c leabn179\n',
 		])

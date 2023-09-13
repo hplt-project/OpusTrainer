@@ -1,6 +1,6 @@
 import random
 import re
-from typing import Dict, Literal, Tuple
+from typing import Dict, Tuple, List, Iterable
 
 import typo
 
@@ -195,7 +195,11 @@ class TypoModifier(Modifier):
 
         self.probabilities = probabilities or self.modifiers
 
-    def __call__(self, line:str) -> str:
+    def __call__(self, batch: List[str]) -> Iterable[str]:
+        for line in batch:
+            yield self.apply(line)
+
+    def apply(self, line:str) -> str:
         fields = line.split("\t")
 
         # TODO: The StrErrer constructor calls random.seed(None), which isn't

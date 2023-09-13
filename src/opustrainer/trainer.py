@@ -11,12 +11,15 @@ import random
 import subprocess
 import shlex
 import time
+import logging
 
 from dataclasses import dataclass
 from typing import List, Tuple, Dict, Any, Optional, Union, Type, TextIO, cast, Iterable, Iterable, Callable, TypeVar, get_type_hints, get_args, get_origin
 from tempfile import TemporaryFile
-from itertools import islice
+from itertools import islice, count, chain
 from pathlib import Path
+from multiprocessing import Queue, Process
+from logging.handlers import QueueHandler, QueueListener
 
 import yaml
 
@@ -613,18 +616,134 @@ class EpochTracker:
         return EpochTrackerState(self.epoch_offset, self.line_offset)
 
 
-In = TypeVar('In')
+class ModifierWorker(Process):
+    """Process that runs batches of sentences through a list of modifiers"""
+    tasks: Queue
+    results: Queue
+    messages: Queue
+    modifiers: List[Modifier]
 
-Out = TypeVar('Out')
+    def __init__(self, tasks:Queue, results:Queue, messages:Queue, modifiers:List[Modifier], **kwargs):
+        super().__init__(**kwargs)
+        self.tasks = tasks
+        self.results = results
+        self.messages = messages
+        self.modifiers = modifiers
+        
+    def run(self):
+        handler = QueueHandler(self.messages)
+        logging.getLogger().addHandler(handler)
+    
+        while True:
+            task = self.tasks.get()
 
-def try_trace_map(fn: Callable[[In], Out], items: Iterable[In]) -> Iterable[Out]:
-    for item in items:
-        try:
-            yield fn(item)
-        except Exception as exc:
-            logger.log(f'Exception while processing line, skipping: {item!r}', 'WARNING',
-                exc_info=(type(exc), exc, # skip fn(item) frame.
-                          exc.__traceback__.tb_next)) # type: ignore # __traceback__ can't be None.
+            # If task is None, this worker can stop.
+            if task is None:
+                break
+
+            # A task consists of a chunk id, batch seed, and lines
+            chunk, seed, batch = task
+
+            try:
+                # Set random seed for this batch, so the worker and the order
+                # in which batches are processed are no longer relevant
+                random.seed(seed)
+
+                for modifier in self.modifiers:
+                    batch = list(modifier(batch))
+
+                self.results.put((chunk, batch, None))
+            except Exception as exc:
+                self.results.put((chunk, None, exc))
+        self.results.close()
+
+
+class ModifierPool:
+    """Pool of ModifierWorker that exposes `map()` to run a batch of sentences
+    through a predefined list of modifiers. Similar to multiprocessing.Pool
+    except that the `func` argument doesn't need to be passed for each call.
+    """
+
+    """Number of worker processes in the pool"""
+    workers: int
+
+    """Modifier list each worker applies to the batches"""
+    modifiers: List[Modifier]
+
+    """Queue for submitting chunks of work to the workers"""
+    tasks: Queue
+
+    """Queue for receiving chunks from the workers"""
+    results: Queue
+
+    messages: Queue
+
+    log_worker: QueueListener
+
+    def __init__(self, modifiers:List[Modifier], processes:int=0):
+        self.modifiers = modifiers
+        self.workers = processes if processes > 0 else min(os.cpu_count() or 1, 8)
+
+    def __enter__(self) -> 'ModifierPool':
+        self.tasks = Queue()
+        self.results = Queue()
+        
+        self.messages = Queue()
+        self.log_worker = QueueListener(self.messages, *logging.getLogger().handlers, respect_handler_level=True)
+        self.log_worker.start()
+
+        self.processes = [
+            ModifierWorker(self.tasks, self.results, self.messages, self.modifiers, daemon=True)
+            for _ in range(self.workers)
+        ]
+
+        for process in self.processes:
+            process.start()
+
+        return self
+
+    def __exit__(self, *args):
+        # Tell workers to stop
+        for _ in self.processes:
+            self.tasks.put(None)
+        self.tasks.close()
+
+        # Wait for workers to close down
+        for process in self.processes:
+            process.join()
+
+        self.log_worker.stop()
+        self.messages.close()
+
+    def map(self, batch:List[str], chunksize:int=0) -> List[str]:
+        if chunksize > 0:
+            chunks, remainder = divmod(len(batch), chunksize)
+        else:
+            chunks = len(self.processes)
+            chunksize, remainder = divmod(len(batch), chunks)
+
+        # Shortcut for getting the slice of batch for each chunk
+        chunk_slice = lambda chunk: slice(
+            chunk * chunksize,
+            chunk * chunksize + (chunksize if chunk < chunks else remainder)
+        )
+
+        # Submit tasks to workers
+        for chunk in range(chunks + (1 if remainder > 0 else 0)):
+            self.tasks.put((chunk, random.random(), batch[chunk_slice(chunk)]))
+
+        # Placeholder for the returned chunks, in order
+        chunk_results = [[]] * (chunks + (1 if remainder > 0 else 0))
+
+        # Retrieve results from workers
+        for _ in range(chunks + (1 if remainder > 0 else 0)):
+            chunk, result, exc = self.results.get()
+            if exc is not None:
+                raise exc
+            chunk_results[chunk] = result
+
+        # Stitch the ordered result chunks back together into a single batch
+        return list(chain(*chunk_results))
 
 
 class Trainer:
@@ -707,36 +826,39 @@ class Trainer:
 
         return self.stage
 
-    def run(self, *, batch_size:int=100) -> Iterable[List[str]]:
+    def run(self, *, batch_size:int=100, chunk_size:int=16, processes:int=0) -> Iterable[List[str]]:
         """Yield batches, moving through the stages of training as datasets are consumed."""
         while self.stage is not None:
             logger.log(f"Starting stage {self.stage.name}")
-            while self.stage.until_epoch is None or self.epoch_tracker.epoch < self.stage.until_epoch:
-                batch: List[str] = []
+            # Stage level modifiers take precedence over global modifiers,
+            # but you can combine them yourself using YAML references.
+            if self.stage.modifiers is not None:
+                modifiers = self.stage.modifiers
+            else:
+                modifiers = self.curriculum.modifiers
 
-                # Read from each dataset according to its weight in this stage
-                # (They will reshuffle and repeat if necessary)
-                for dataset, weight in self.stage.datasets:
-                    batch.extend(islice(self.readers[dataset.name], 0, int(batch_size * weight)))
+            with ModifierPool(modifiers) as pool:
+                while self.stage.until_epoch is None or self.epoch_tracker.epoch < self.stage.until_epoch:
+                    batch: List[str] = []
 
-                # Stage level modifiers take precedence over global modifiers,
-                # but you can combine them yourself using YAML references.
-                if self.stage.modifiers is not None:
-                    modifiers = self.stage.modifiers
-                else:
-                    modifiers = self.curriculum.modifiers
+                    # Read from each dataset according to its weight in this stage
+                    # (They will reshuffle and repeat if necessary)
+                    for dataset, weight in self.stage.datasets:
+                        batch.extend(
+                            line.rstrip('\r\n') for line in
+                            islice(self.readers[dataset.name], 0, int(batch_size * weight))
+                        )
 
-                # Apply any modifiers to random lines in the batch, or sentence
-                # (Multiple modifiers can be applied to the same line!)
-                for modifier in modifiers:
-                    batch = list(try_trace_map(lambda line: modifier(line.rstrip('\r\n')) + '\n', batch))
+                    # Apply any modifiers to random lines in the batch, or sentence
+                    # (Multiple modifiers can be applied to the same line)
+                    batch = pool.map(batch, chunk_size)
 
-                if self.shuffle:
-                    random.shuffle(batch)
+                    if self.shuffle:
+                        random.shuffle(batch)
 
-                # Tell anyone whose listening that something interesting happened
-                # TODO: Yield something useful, e.g. progress.
-                yield batch
+                    # Tell anyone whose listening that something interesting happened
+                    # TODO: Yield something useful, e.g. progress.
+                    yield [line + '\n' for line in batch]
 
             # Move onto next stage. May be `None`, which would end this generator
             self.next_stage()
@@ -814,6 +936,8 @@ def main() -> None:
     parser.add_argument("--do-not-resume", '-d', action="store_true", help='Do not resume from the previous training state')
     parser.add_argument("--no-shuffle", '-n', action="store_false", help='Do not shuffle, for debugging', dest="shuffle")
     parser.add_argument("--batch-size", '-b', type=int, default=100, help='Batch size')
+    parser.add_argument("--chunk-size", '-B', type=int, default=16, help='Chunk size of batches fed to modifiers')
+    parser.add_argument("--workers", '-j', type=int, default=os.cpu_count() or 1, help='Number of workers')
     parser.add_argument("--log-level", type=str, default="INFO", help="Set log level. Available levels: DEBUG, INFO, WARNING, ERROR, CRITICAL. Default is INFO")
     parser.add_argument("--log-file", '-l', type=str, default=None, help="Target location for logging. Always logs to stderr and optionally to a file.")
     parser.add_argument("trainer", type=str, nargs=argparse.REMAINDER, help="Trainer program that gets fed the input. If empty it is read from config.")
@@ -860,7 +984,7 @@ def main() -> None:
     #      the trainer is already dead at this point.
     try:
         try:
-            for batch in state_tracker.run(trainer, batch_size=args.batch_size):
+            for batch in state_tracker.run(trainer, batch_size=args.batch_size, chunk_size=args.chunk_size, processes=args.workers):
                 model_trainer.stdin.writelines(batch)
         except KeyboardInterrupt:
             logger.log("Ctrl-c pressed, stopping training")

@@ -1,11 +1,11 @@
 import random
 from operator import attrgetter
 from pathlib import Path
-from typing import Set, List, Tuple, Optional, Protocol, TypeVar, Iterable, NamedTuple
+from typing import Set, List, Tuple, Optional, TypeVar, Iterable
 
 from opustrainer.alignments import Pair, parse_alignments, format_alignments
 from opustrainer.modifiers import Modifier
-from opustrainer.tokenizers import Detokenizer, SpaceDetokenizer, SpaceTokenizer, MosesDetokenizer, SentencePieceTokenizer
+from opustrainer.tokenizers import SpaceDetokenizer, SpaceTokenizer, MosesDetokenizer, SentencePieceTokenizer
 from opustrainer.modifiers.retokenize import Retokenizer, remap_alignment_pairs
 from opustrainer import logger
 
@@ -283,7 +283,14 @@ class PlaceholderTagModifier(Modifier):
 
         self.modes.append(('tag', 1.0)) # Weight doesn't matter as long as cumsum => 1.0, it's last on the list anyway
 
-    def __call__(self, line:str) -> str:
+    def __call__(self, batch: List[str]) -> Iterable[str]:
+        for line in batch:
+            try:
+                yield self.apply(line)
+            except Exception as exc:
+                logger.log(f'Skipping line because of exception: {exc!r}', 'WARNING')
+
+    def apply(self, line:str) -> str:
         """Applies tag to words in a line based on alignment info, and then removes the alignment info from the line.
            This is used to enable terminology support by tagging random words with their translation.
            eg "I like cake" would become "I __source__ like __target__ gusta __done__ cake. 

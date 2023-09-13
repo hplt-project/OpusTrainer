@@ -1,5 +1,5 @@
 from abc import ABC, abstractmethod
-from typing import NamedTuple, Dict, List, Tuple, Optional, Any, Protocol
+from typing import NamedTuple, Dict, List, Iterable, Tuple, Optional, Any, Protocol
 
 
 # List of tokens/words according to some tokenization scheme
@@ -60,5 +60,5 @@ class Modifier(ABC):
         pass
 
     @abstractmethod
-    def __call__(self, line: str) -> str:
+    def __call__(self, batch: List[str]) -> Iterable[str]:
         pass

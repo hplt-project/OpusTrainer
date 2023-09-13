@@ -181,6 +181,50 @@ class TestTrainer(unittest.TestCase):
 			
 		self.assertEqual(batches, batches_ref)
 
+	def test_deterministic_parallel(self):
+		"""End-to-end test to confirm that training with 2 workers or with 4 workers
+		should yield the same training data going to the trainer.
+		"""
+		config = {
+			'datasets': {
+				'clean': 'contrib/test-data/clean',
+				'medium': 'contrib/test-data/medium',
+				'dirty': 'contrib/test-data/dirty'
+			},
+			'stages': [
+				'start',
+				'mid'
+			],
+			'start': [
+				'clean 0.8',
+				'medium 0.2',
+				'dirty 0',
+				'until clean 1'
+			],
+			'mid': [
+				'clean 0.6',
+				'medium 0.3',
+				'dirty 0.1',
+				'until medium 1',
+			],
+			'modifiers': [
+				{'UpperCase': 0.25}
+			],
+			'seed': 1111
+		}
+		
+		curriculum = CurriculumLoader().load(config)
+
+		# Run with one worker and default chunk size
+		with closing(Trainer(curriculum)) as trainer:
+			batches_linear = list(trainer.run(processes=1))
+
+		# Run with three workers, and default batch size
+		with closing(Trainer(curriculum)) as trainer:
+			batches_parallel = list(trainer.run(processes=4))
+
+		self.assertEqual(batches_linear, batches_parallel)
+
 
 class TestCurriculumLoader(unittest.TestCase):
 	def test_simple(self):
@@ -363,9 +407,9 @@ class TestCurriculumLoader(unittest.TestCase):
 				# Assert we skipped the line
 				self.assertEqual(len(output), 1)
 				# Assert that we got the general error message
-				self.assertRegex(logger_ctx.output[0], r'Exception while processing line, skipping:')
+				self.assertRegex(logger_ctx.output[0], r'Skipping line because of exception:')
 				# Assert that we got the specific error as well
-				self.assertRegex(logger_ctx.output[0], r'ValueError: Out-of-bound alignment pairs')
+				self.assertRegex(logger_ctx.output[0], r'ValueError\(\'Out-of-bound alignment pairs\'\)')
 
 	def test_num_fields(self):
 		"""Tests the num field limiter"""
