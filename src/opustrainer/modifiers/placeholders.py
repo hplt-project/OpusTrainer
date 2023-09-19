@@ -315,7 +315,6 @@ class PlaceholderTagModifier(Modifier):
                 candidate = first(
                     candidate
                     for candidate in get_placeholding_candidates(alignments[candidate_offset:])
-                    if source[candidate.src] != target[candidate.trg]
                 )
             except StopIteration:
                 # `first` failed because there are no sutable candidates, so lets break out of this
@@ -346,8 +345,9 @@ class PlaceholderTagModifier(Modifier):
                     augment_tokens = get_random_unicode_words()
                 
                 tag_tokens = self.template.format(src=source[candidate.src], trg=' '.join(augment_tokens)).split()
+                tag_tokens_trg = self.template.format(src="", trg=' '.join(augment_tokens)).split()
                 source = source[:candidate.src] + tag_tokens + source[candidate.src+1:]
-                target = target[:candidate.trg] + augment_tokens + target[candidate.trg+1:]
+                target = target[:candidate.trg] + tag_tokens_trg + target[candidate.trg+1:]
 
                 src_tag_offset = first(n for n, tpl in enumerate(self.template.split()) if '{src}' in tpl)
                 trg_tag_offset = first(n for n, tpl in enumerate(self.template.split()) if '{trg}' in tpl)
