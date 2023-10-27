@@ -22,7 +22,7 @@ classifiers = [
     "Topic :: Scientific/Engineering"
 ]
 dependencies = [
-    "PyYAML==6.0",
+    "PyYAML>=6.0.1",
     "sacremoses==0.0.53",
     "sentencepiece==0.1.99",
     "typo==0.1.5"
