@@ -794,8 +794,8 @@ def print_state(state:TrainerState) -> None:
         logger.log(f"Dataset {name}: overall epochs {reader.epoch: 3d}.{reader.line:010d}")
 
 
-def main() -> None:
-    parser = argparse.ArgumentParser(description="Feeds marian tsv data for training.")
+def parse_args(args:List[str]) -> argparse.Namespace:
+    parser = argparse.ArgumentParser(description="Feeds marian tsv data for training.", allow_abbrev=False)
     parser.add_argument("--config", '-c', required=True, type=str, help='YML configuration input.')
     parser.add_argument("--state", '-s', type=str, help='YML state file, defaults to ${CONFIG}.state.')
     parser.add_argument("--sync", action="store_true", help="Do not shuffle async")
@@ -808,8 +808,12 @@ def main() -> None:
     parser.add_argument("--log-level", type=str, default="INFO", help="Set log level. Available levels: DEBUG, INFO, WARNING, ERROR, CRITICAL. Default is INFO")
     parser.add_argument("--log-file", '-l', type=str, default=None, help="Target location for logging. Always logs to stderr and optionally to a file.")
     parser.add_argument("trainer", type=str, nargs=argparse.REMAINDER, help="Trainer program that gets fed the input. If empty it is read from config.")
+    return parser.parse_args(args)
 
-    args = parser.parse_args()
+
+def main() -> None:
+    args = parse_args(sys.argv[1:])
+
     logger.setup_logger(args.log_file, args.log_level)
 
     with open(args.config, 'r', encoding='utf-8') as fh:
