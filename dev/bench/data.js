@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1698682091640,
+  "lastUpdate": 1698682092813,
   "repoUrl": "https://github.com/hplt-project/OpusTrainer",
   "entries": {
     "Benchmark": [
@@ -155,6 +155,45 @@ window.BENCHMARK_DATA = {
           {
             "name": "Tags with SPM",
             "value": 94124578240,
+            "unit": "ns"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "jelmer@ikhoefgeen.nl",
+            "name": "Jelmer van der Linde",
+            "username": "jelmervdl"
+          },
+          "committer": {
+            "email": "jelmer@ikhoefgeen.nl",
+            "name": "Jelmer van der Linde",
+            "username": "jelmervdl"
+          },
+          "distinct": true,
+          "id": "452c4eab41644d726c2ffd52c04bf2830f7559dc",
+          "message": "Bump sacremoses\n\nDogfooding! But to be fair this should bump performance of the detokenizer quite a bit.",
+          "timestamp": "2023-10-30T16:04:26Z",
+          "tree_id": "7350a2df2254fb2d60854914449dfdd35058fa6c",
+          "url": "https://github.com/hplt-project/OpusTrainer/commit/452c4eab41644d726c2ffd52c04bf2830f7559dc"
+        },
+        "date": 1698682091161,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "Baseline",
+            "value": 3361235434,
+            "unit": "ns"
+          },
+          {
+            "name": "Tags",
+            "value": 51195189973,
+            "unit": "ns"
+          },
+          {
+            "name": "Tags with SPM",
+            "value": 76415325899,
             "unit": "ns"
           }
         ]
