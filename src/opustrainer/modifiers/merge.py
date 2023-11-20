@@ -1,38 +1,48 @@
-# This file contains merge modifier and noise modifier
 import random
-from opustrainer.modifiers import Modifier
+from typing import List, Iterable, Optional
+from itertools import accumulate, chain
 
-import random
-from typing import List, Sequence, Union
 from opustrainer.modifiers import Modifier
 from opustrainer.alignments import format_alignments, parse_alignments, Pair
+from opustrainer.tokenizers import SpaceDetokenizer, SpaceTokenizer
+
 
 def merge_sents(inputs: List[str]) -> str:
     """Merges n sentences together, fixing up their alignments"""
-    srcs: List[List[str]] = [x.split('\t')[0].split() for x in inputs]
-    trgs: List[List[str]] = [x.split('\t')[1].split() for x in inputs]
-    align_txt: Union[str, None] = None
-    if len(inputs[0].split('\t')) > 2:
-        aligns: List[List[Pair]] = [parse_alignments(x.split('\t')[2].strip()) for x in inputs]
+    rows = [line.split('\t') for line in inputs]
 
-        add_src = len(srcs[0])
-        add_trg = len(trgs[0])
-        for i in range(1, len(srcs)):
-            for j in range(len(aligns[i])):
-                aligns[i][j] = Pair(aligns[i][j][0] + add_src, aligns[i][j][1] + add_trg)
-            add_src = add_src + len(srcs[i])
-            add_trg = add_trg + len(trgs[i])
+    input_tokens = (
+        [row[0].split() for row in rows], # src
+        [row[1].split() for row in rows], # trg
+    )
 
-        align_txt = format_alignments([item for sublist in aligns for item in sublist])
+    # src and trg sentences, merged
+    output_cols = [" ".join(chain(*side)) for side in input_tokens]
 
-    srcs_txt: str = " ".join([x.split('\t')[0] for x in inputs])
-    trgs_txt: str = " ".join([x.split('\t')[1] for x in inputs])
+    # If all rows have alignment info, add a merged alignment column
+    if all(len(row) > 2 for row in rows):
+        # Alignments as Pairs per input sentence
+        alignments = [parse_alignments(row[2]) for row in rows]
 
-    if align_txt is not None:
-        return srcs_txt + '\t' + trgs_txt + '\t' + align_txt
-    else:
-        return srcs_txt + '\t' + trgs_txt
-        
+        # Offsets for where alignments per input sentence should start
+        offsets = tuple(
+            list(accumulate((len(sentence) for sentence in side), initial=0))
+            for side in input_tokens
+        )
+
+        # New alignment pairs that have been offset to account for the sentences
+        # that would precede it.
+        joined_alignments = [
+            Pair(p.src + offsets[0][i], p.trg + offsets[1][i])
+            for i, sentence_pairs in enumerate(alignments)
+            for p in sentence_pairs
+        ]
+
+        output_cols.append(format_alignments(joined_alignments))
+
+    return "\t".join(output_cols)
+
+
 class MergeModifier(Modifier):
     """Randomly merges up to n lines into one
     
@@ -46,24 +56,19 @@ class MergeModifier(Modifier):
     """
     min_lines_merge: int
     max_lines_merge: int
-    def __init__(self, probability: float=0.0, min_lines_merge: int=2, max_lines_merge: int=4):
+
+    def __init__(self, probability: float, min_lines_merge: int=2, max_lines_merge: int=4):
         super().__init__(probability)
         self.min_lines_merge = min_lines_merge
         self.max_lines_merge = max_lines_merge
 
-    def __call__(self, batch:List[str]) -> Sequence[str]:
-        newbatch: List[str] = []
-        # Identify merging candidates and their lengths
-        prev_end = -1
-        for i in range(len(batch)):
-            if i < prev_end:
-                continue
-            elif self.probability > random.random():
-                merge_end = i + random.randint(self.min_lines_merge, self.max_lines_merge)
-                prev_end = merge_end
-                merge_batch: str = merge_sents(batch[i:merge_end])
-                newbatch.append(merge_batch)
+    def __call__(self, batch:List[str]) -> Iterable[str]:
+        i = 0
+        while i < len(batch):
+            if self.probability > random.random():
+                merge_size = random.randint(self.min_lines_merge, self.max_lines_merge)
+                yield merge_sents(batch[i:i+merge_size])
+                i += merge_size
             else:
-                newbatch.append(batch[i])
-
-        return newbatch
+                yield batch[i]
+                i += 1

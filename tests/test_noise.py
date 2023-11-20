@@ -15,6 +15,7 @@ class TestMerge(unittest.TestCase):
       "微生物 检验 与 食品 安全 控制 .	Food Poisoning and Food Hygiene.	3-0 0-1 1-1 2-1 2-2 3-3 4-3 5-4 6-4"
     ]*10
 
+    # Remove column with alignment info
     self.example_noalign = ["\t".join(a.split('\t')[:-1]) for a in self.example]
 
     # With 20% prob this is triggered 3 times we check one of the matches. We expect new length to be 23
@@ -23,12 +24,12 @@ class TestMerge(unittest.TestCase):
 
   def test_noise(self):
     noiser = NoiseModifier(0.2)
-    noised = noiser(self.example_noalign)
+    noised = list(noiser(self.example_noalign))
     self.assertEqual(noised[9], self.num_nine_noise)
     self.assertEqual(len(noised), 23)
     
   def test_noise_align(self):
     noiser = NoiseModifier(0.2)
-    noised = noiser(self.example)
+    noised = list(noiser(self.example))
     self.assertEqual(noised[9], self.num_nine_noise_align)
     self.assertEqual(len(noised), 23)
