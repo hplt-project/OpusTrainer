@@ -7,6 +7,29 @@ import typo
 from opustrainer.modifiers import Modifier
 
 
+# Monkey patch typo to not try to find the nearest digit for
+# non-digit numerals.
+# See https://github.com/hplt-project/OpusTrainer/issues/40
+# See https://github.com/ranvijaykumar/typo/issues/3
+import typo.keyboardlayouts.en_default
+_get_random_neighbor = typo.keyboardlayouts.en_default.get_random_neighbor
+
+def skip_non_digit_decimals(char, seed=None):
+    if char.isdecimal() and not char.isdigit():
+        # Try reinterpreting the numeral as a base-10 Arabic digit.
+        try:
+            reinterpreted = '{:d}'.format(int(char))
+            if len(reinterpreted) > 1:
+                raise ValueError('Too long')
+        except:
+            return char
+        else:
+            char = reinterpreted
+    return _get_random_neighbor(char, seed)
+
+typo.keyboardlayouts.en_default.get_random_neighbor = skip_non_digit_decimals
+
+
 def add_random_space_with_alignment(
     string: str, alignment_str: str, include_edges=False
 ) -> Tuple[str, str]:

@@ -82,3 +82,14 @@ class TestTypos(unittest.TestCase):
 			'cl ean2841\n',
 			'c leabn179\n',
 		])
+
+	def test_regression_40(self):
+		disable_all = {
+			name: 0.0
+			for name in TypoModifier.modifiers.keys()
+		}
+		line = '٦\t6'
+		modifier = TypoModifier(1.0, **{**disable_all, 'extra_char':1.0})
+		modified = next(iter(modifier([line])))
+		self.assertNotEqual(modified, line) # test it changed
+		self.assertRegex(modified, r'^..\t.$') # test it has 1 extra char
