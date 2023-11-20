@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1700493292209,
+  "lastUpdate": 1700495869301,
   "repoUrl": "https://github.com/hplt-project/OpusTrainer",
   "entries": {
     "Benchmark": [
@@ -311,6 +311,45 @@ window.BENCHMARK_DATA = {
           {
             "name": "Tags with SPM",
             "value": 54098483234,
+            "unit": "ns"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "jelmer@ikhoefgeen.nl",
+            "name": "Jelmer van der Linde",
+            "username": "jelmervdl"
+          },
+          "committer": {
+            "email": "jelmer@ikhoefgeen.nl",
+            "name": "Jelmer van der Linde",
+            "username": "jelmervdl"
+          },
+          "distinct": true,
+          "id": "13827267f090d3bd0591b36b421dfd9e6f7b50e5",
+          "message": "Work-around for #40\n\nThis fixes #40 until this is fixed in typo itself: https://github.com/ranvijaykumar/typo/issues/3",
+          "timestamp": "2023-11-20T15:55:04Z",
+          "tree_id": "fb7ccc072f891bbc9021e26e6d881fd582e4d125",
+          "url": "https://github.com/hplt-project/OpusTrainer/commit/13827267f090d3bd0591b36b421dfd9e6f7b50e5"
+        },
+        "date": 1700495868886,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "Baseline",
+            "value": 3052265848,
+            "unit": "ns"
+          },
+          {
+            "name": "Tags",
+            "value": 37225446062,
+            "unit": "ns"
+          },
+          {
+            "name": "Tags with SPM",
+            "value": 54626364628,
             "unit": "ns"
           }
         ]
