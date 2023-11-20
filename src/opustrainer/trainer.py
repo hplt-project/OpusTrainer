@@ -12,7 +12,7 @@ import shlex
 import time
 
 from dataclasses import dataclass
-from typing import List, Tuple, Dict, Any, Optional, Union, Type, TextIO, cast, Iterable, Iterable, Callable, TypeVar, get_type_hints, get_args, get_origin
+from typing import List, Tuple, Dict, Any, Optional, Union, Type, TextIO, cast, Iterable, Iterable, TypeVar, get_type_hints, get_args, get_origin
 from tempfile import TemporaryFile
 from itertools import islice
 from pathlib import Path
@@ -20,6 +20,8 @@ from pathlib import Path
 import yaml
 
 from opustrainer.modifiers import Modifier
+from opustrainer.modifiers.merge import MergeModifier
+from opustrainer.modifiers.noise import NoiseModifier
 from opustrainer.modifiers.prefix import PrefixModifier
 from opustrainer.modifiers.surface import UpperCaseModifier, TitleCaseModifier
 from opustrainer.modifiers.placeholders import PlaceholderTagModifier
@@ -39,6 +41,8 @@ def ignore_sigint():
 # Available batch modifiers
 # TODO: Import these lazy, on demand?
 MODIFIERS = {
+    'Merge': MergeModifier,
+    'Noise': NoiseModifier,
     'UpperCase': UpperCaseModifier,
     'TitleCase': TitleCaseModifier,
     'Tags': PlaceholderTagModifier,

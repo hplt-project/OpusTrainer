@@ -14,7 +14,7 @@ T = TypeVar('T')
 
 def random_weighted_choice(options:Iterable[Tuple[T,float]]) -> T:
     choice = random.random()
-    cumsum = 0
+    cumsum = 0.0
     for option, prob in options:
         cumsum += prob
         if choice < cumsum:

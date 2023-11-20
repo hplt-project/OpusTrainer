@@ -1,12 +1,10 @@
 import random
 import unittest
-import tempfile
 
 from textwrap import dedent
 
 from opustrainer.modifiers.placeholders import PlaceholderTagModifier
 from opustrainer.trainer import CurriculumLoader
-from opustrainer import logger
 
 
 def first(it):
