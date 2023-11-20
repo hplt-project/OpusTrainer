@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1700493290417,
+  "lastUpdate": 1700493292209,
   "repoUrl": "https://github.com/hplt-project/OpusTrainer",
   "entries": {
     "Benchmark": [
@@ -233,6 +233,45 @@ window.BENCHMARK_DATA = {
           {
             "name": "Tags with SPM",
             "value": 76415325899,
+            "unit": "ns"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "jelmer@ikhoefgeen.nl",
+            "name": "Jelmer",
+            "username": "jelmervdl"
+          },
+          "committer": {
+            "email": "noreply@github.com",
+            "name": "GitHub",
+            "username": "web-flow"
+          },
+          "distinct": true,
+          "id": "bf2d16b278b2c7b621d803730a886608676b340d",
+          "message": "Merge pull request #41 from hplt-project/noise_and_merge\n\nAdd merge and standalone noise modifiers",
+          "timestamp": "2023-11-20T15:12:08Z",
+          "tree_id": "c9bc2d21ff76d03adfc95c83f89db9f567fe44fb",
+          "url": "https://github.com/hplt-project/OpusTrainer/commit/bf2d16b278b2c7b621d803730a886608676b340d"
+        },
+        "date": 1700493289354,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "Baseline",
+            "value": 2843568359,
+            "unit": "ns"
+          },
+          {
+            "name": "Tags",
+            "value": 36895529158,
+            "unit": "ns"
+          },
+          {
+            "name": "Tags with SPM",
+            "value": 54098483234,
             "unit": "ns"
           }
         ]
