@@ -1,5 +1,5 @@
 import random
-from typing import Callable, Type, List, Iterable
+from typing import List, Iterable
 
 from opustrainer.modifiers import Modifier
 

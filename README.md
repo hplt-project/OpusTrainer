@@ -164,7 +164,28 @@ modifiers:
   random_space:  0.1 # Adds a random space in the string.
   repeated_char: 0.1 # Repeats a random word character.
   unichar:       0.1 # Replaces a random consecutive repeated letter with a single letter. 
-````
+```
+
+#### Merge
+Adds a modifier that merges up to `n` lines lines together. The idea is that sometimes we want to see longer sequences so that we are more robust. 
+
+```yaml
+modifiers:
+- Merge: 0.01
+  min_lines: 2 # Minimum lines to merge together
+  max_lines: 4 # Maximum lines to merge together
+```
+
+#### Noise
+Adds a noise modifier that inserts sentence pair containing identical random unicode noise on the source and target side. This is useful to teach the model to copy things it doesn't understand (IE notranslate).
+
+```yaml
+modifiers:
+- Noise: 0.01
+  min_word_length: 2 # Minimum word length for each word in the noisy sentence
+  max_word_length: 5 # Maximum word length for each word in the noisy sentence
+  max_words: 6 # Maximum number of words in each noisy sentence
+```
 
 #### Tags
 Adds a placeholder tag to the source sentence that can be used by the model to hint how it should translate that word. The word to hint is chosen at random from the target sentence. Only words with a 1-to-1 mapping between source and target are considered.
@@ -186,6 +207,28 @@ You can specify custom detokenizer languages using `custom_detok_src` and `custo
 The `spm_vocab` option can be used to recompute the alignment info to match the tokenisation from the sentencepiece vocabulary. This is mostly useful for Marian, which takes untokenised input but expects the alignment info to match the sentencepiece tokenisation it performs. Note that at the moment alignment info is only produced when `spm_vocab` is given.
 
 The format for telling the translation model the intention to translate a word in a certain way can be controlled by `template`. Here `{src}` and `{trg}` are replaced by the selected words from the source and target side of the sentence pair.
+
+##### Replace
+Sometimes we want to just replace the source token with the target token directly, so during terminology inference the model doesn't try to think too hard what to do, but always places the hinted token on the target side. See `contrib/test_enzh_noise_config.yml` for example usage.
+
+```yml
+modifiers:
+  - Tags: 0.1
+    custom_detok_src: null # Null value for the src detokenizer
+    custom_detok_trg: zh
+    replace: 0.4 # 0.4 out of the time tags is triggered, instead replace the target token with random noise, and use that random noise to tag a corresponding source word.
+```
+
+##### Inline Noise
+If alignment information is present, we can augment the training data with inline unicode noise that appears at the appropriate location on both the source and the target. This is useful to teach the model to copy things it doesn't understand (IE notranslate). See `contrib/test_enzh_noise_config.yml` for example usage.
+
+```yml
+modifiers:
+  - Tags: 0.1
+    custom_detok_src: null # Null value for the src detokenizer
+    custom_detok_trg: zh
+    augment: 0.4 # 0.4 out of the time tags is triggered, instead augment the source and the target with random noise. If you want 100% only noise without tag functionality use augment: 1
+```
 
 **Note**: Due to how most modifiers are implemented, they will have a normalising effect on spaces. Sequences of spaces will be collapsed into a single space. This is also true for the *Tags* modifier.
 

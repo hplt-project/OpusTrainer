@@ -1,4 +1,4 @@
-from typing import Optional, List
+from typing import Optional, List, Union
 from opustrainer.types import Pair, TokenList
 
 
