@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1700565680924,
+  "lastUpdate": 1700565681949,
   "repoUrl": "https://github.com/hplt-project/OpusTrainer",
   "entries": {
     "Benchmark": [
@@ -467,6 +467,45 @@ window.BENCHMARK_DATA = {
           {
             "name": "Tags with SPM",
             "value": 53713721799,
+            "unit": "ns"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "jelmer@ikhoefgeen.nl",
+            "name": "Jelmer",
+            "username": "jelmervdl"
+          },
+          "committer": {
+            "email": "noreply@github.com",
+            "name": "GitHub",
+            "username": "web-flow"
+          },
+          "distinct": true,
+          "id": "cc85195cfd1cb8d2c6b30616393d329e40c6fabf",
+          "message": "Create LICENSE",
+          "timestamp": "2023-11-21T11:18:48Z",
+          "tree_id": "53dc714dc2cde1e98a3185c4ea64855923e1b9ad",
+          "url": "https://github.com/hplt-project/OpusTrainer/commit/cc85195cfd1cb8d2c6b30616393d329e40c6fabf"
+        },
+        "date": 1700565680481,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "Baseline",
+            "value": 2474342465,
+            "unit": "ns"
+          },
+          {
+            "name": "Tags",
+            "value": 36688829239,
+            "unit": "ns"
+          },
+          {
+            "name": "Tags with SPM",
+            "value": 54178408164,
             "unit": "ns"
           }
         ]
