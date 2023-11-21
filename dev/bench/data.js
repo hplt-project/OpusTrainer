@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1700565102535,
+  "lastUpdate": 1700565103849,
   "repoUrl": "https://github.com/hplt-project/OpusTrainer",
   "entries": {
     "Benchmark": [
@@ -389,6 +389,45 @@ window.BENCHMARK_DATA = {
           {
             "name": "Tags with SPM",
             "value": 54626364628,
+            "unit": "ns"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "jelmer@ikhoefgeen.nl",
+            "name": "Jelmer van der Linde",
+            "username": "jelmervdl"
+          },
+          "committer": {
+            "email": "jelmer@ikhoefgeen.nl",
+            "name": "Jelmer van der Linde",
+            "username": "jelmervdl"
+          },
+          "distinct": true,
+          "id": "eeb460f394a65e0e4bca2c53a26379ab3d167339",
+          "message": "Simplify/fix regression 40 test",
+          "timestamp": "2023-11-21T11:09:00Z",
+          "tree_id": "cfa01bf48839a3c936cd30fb7820a3a9667e7081",
+          "url": "https://github.com/hplt-project/OpusTrainer/commit/eeb460f394a65e0e4bca2c53a26379ab3d167339"
+        },
+        "date": 1700565101977,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "Baseline",
+            "value": 2490375411,
+            "unit": "ns"
+          },
+          {
+            "name": "Tags",
+            "value": 36374268556,
+            "unit": "ns"
+          },
+          {
+            "name": "Tags with SPM",
+            "value": 53713721799,
             "unit": "ns"
           }
         ]
