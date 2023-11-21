@@ -84,6 +84,7 @@ class TestTypos(unittest.TestCase):
 		])
 
 	def test_regression_40(self):
+		random.seed(1)
 		disable_all = {
 			name: 0.0
 			for name in TypoModifier.modifiers.keys()
