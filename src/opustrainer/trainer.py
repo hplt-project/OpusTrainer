@@ -739,8 +739,6 @@ class StateTracker:
     """Wraps around the trainer.run() call to restore and dump state its."""
     path: str
     loader: StateLoader
-    dump: bool
-    restore: bool
 
     def __init__(self, path:str, *, loader:StateLoader=StateLoader(), timeout=60):
         """
@@ -806,9 +804,7 @@ def parse_args(args:List[str]) -> argparse.Namespace:
     return parser.parse_args(args)
 
 
-def main() -> None:
-    args = parse_args(sys.argv[1:])
-
+def main(args:argparse.Namespace) -> None:
     logger.setup_logger(args.log_file, args.log_level)
 
     with open(args.config, 'r', encoding='utf-8') as fh:
@@ -859,10 +855,14 @@ def main() -> None:
         # Tracks whether we interrupted training, or whether the stopping occurred naturally
         interrupted = False
 
+        # Tracks whether stdin was closed due to BrokenPipeError
+        closed = False
+
         try:
             for batch in state_tracker.run(trainer, batch_size=args.batch_size, chunk_size=args.chunk_size, processes=args.workers):
                 model_trainer.stdin.writelines(batch)
         except BrokenPipeError:
+            closed = True
             logger.log("trainer stopped reading input")
         except KeyboardInterrupt:
             interrupted = True
@@ -872,10 +872,11 @@ def main() -> None:
         # or because ctrl-c was pressed. Pressing ctrl-c more advances to next level of aggressiveness.
         for urgency in ['exit', 'terminate', 'kill']:
             try:
-                logger.log(f"waiting for trainer to {urgency}. Press ctrl-c to be more aggressive")
+                logger.log(f"waiting for trainer to {urgency}")
                 
                 if urgency == 'exit':
-                    model_trainer.stdin.close()
+                    if not closed:
+                        model_trainer.stdin.close()
                 elif urgency == 'terminate':
                     model_trainer.terminate()
                 elif urgency == 'kill':
@@ -887,6 +888,8 @@ def main() -> None:
                     sys.exit(retval)
                 elif interrupted:
                     sys.exit(130)
+                else:
+                    break # We're done trying to stop to various degrees
             except KeyboardInterrupt:
                 interrupted = True
                 continue # Skip to the next degree of forcefully stopping
@@ -895,5 +898,6 @@ def main() -> None:
         # would already have called sys.exit() by now.
         trainer.next_stage()
 
+
 if __name__ == '__main__':
-    main()
+    main(parse_args(sys.argv[1:]))

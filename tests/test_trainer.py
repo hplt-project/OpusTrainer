@@ -452,35 +452,3 @@ class TestCurriculumLoader(unittest.TestCase):
 					])
 					# Assert that we got an error message for one line
 					self.assertRegex(logger_ctx.output[0], r'\[Trainer\] Expected 3 fields in clean line:')
-
-	def test_next_stage(self):
-		"""Test letting the trainer move to the next stage using early-stopping"""
-		config = {
-				'datasets': {
-						'clean': 'test/data/clean',
-						'medium': 'test/data/medium',
-				},
-				'stages': [
-						'start',
-						'mid',
-				],
-				'start': [
-						'clean 1.0',
-						'until clean inf'
-				],
-				'mid': [
-						'medium 1.0',
-						'until medium inf',
-				],
-				'seed': 1111
-		}
-
-		curriculum = CurriculumLoader().load(config)
-
-		# Reference batches (trainer runs without resuming)
-		with closing(Trainer(curriculum)) as trainer:
-			self.assertEqual(trainer.stage.name, 'start')
-			trainer.next_stage()
-			self.assertEqual(trainer.stage.name, 'mid')
-			trainer.next_stage()
-			self.assertIsNone(trainer.stage)

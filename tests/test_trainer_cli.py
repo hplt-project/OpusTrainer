@@ -1,5 +1,10 @@
 #!/usr/bin/env python3
 import unittest
+import yaml
+import sys
+from subprocess import Popen
+from pathlib import Path
+from tempfile import TemporaryDirectory, TemporaryFile
 from opustrainer.trainer import parse_args
 
 
@@ -28,3 +33,51 @@ class TestArgumentParser(unittest.TestCase):
 			'trainer': ['marian', '--log', 'marian.log']
 		}
 		self.assertEqual({**vars(parsed), **expected}, vars(parsed))
+
+	def test_early_stopping(self):
+		"""Test letting the trainer move to the next stage using early-stopping"""
+		head_lines = 10000
+
+		basepath = Path('contrib').absolute()
+
+		config = {
+				'datasets': {
+						'clean': str(basepath / 'test-data/clean'),
+						'medium': str(basepath / 'test-data/medium'),
+				},
+				'stages': [
+						'start',
+						'mid',
+				],
+				'start': [
+						'clean 1.0',
+						'until clean inf'
+				],
+				'mid': [
+						'medium 1.0',
+						'until medium inf',
+				],
+				'seed': 1111
+		}
+
+		with TemporaryDirectory() as tmp, TemporaryFile() as fout:
+			with open(Path(tmp) / 'config.yml', 'w+t') as fcfg:
+				yaml.safe_dump(config, fcfg)
+
+			child = Popen([
+				sys.executable,
+				'-m', 'opustrainer',
+				'--do-not-resume',
+				'--no-shuffle',
+				'--config', str(Path(tmp) / 'config.yml'),
+				'head', '-n', str(head_lines)
+			], stdout=fout)
+
+			# Assert we exited neatly
+			retval = child.wait(30)
+			self.assertEqual(retval, 0)
+
+			# Assert we got the number of lines we'd expect
+			fout.seek(0)
+			line_count = sum(1 for _ in fout)
+			self.assertEqual(line_count, len(config['stages']) * head_lines)
