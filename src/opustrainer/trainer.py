@@ -71,6 +71,7 @@ class Stage:
     until_dataset: str
     until_epoch: Optional[int]
     modifiers: Optional[List[Modifier]]
+    arguments: List[str]
 
 
 @dataclass(frozen=True)
@@ -448,6 +449,9 @@ class CurriculumV1Loader:
             - until dataset3 epochs
           modifiers:
             - Modifier: freq
+          arguments:
+            - arg1
+            - arg2
         ```
         """
         return {
@@ -491,7 +495,8 @@ class CurriculumV1Loader:
                 datasets=datasets,
                 until_dataset=until_dataset_name,
                 until_epoch=until_epoch,
-                modifiers=self._load_modifiers(ymldata[stage_name], basepath) if isinstance(ymldata[stage_name], dict) and 'modifiers' in ymldata[stage_name] else None
+                modifiers=self._load_modifiers(ymldata[stage_name], basepath) if isinstance(ymldata[stage_name], dict) and 'modifiers' in ymldata[stage_name] else None,
+                arguments=[str(arg) for arg in ymldata[stage_name]['arguments']] if isinstance(ymldata[stage_name], dict) and 'arguments' in ymldata[stage_name] else [],
             )
         except Exception as exc:
             raise CurriculumLoaderError(f"could not complete the parse of stage '{stage_name}': {exc!s}") from exc
@@ -836,7 +841,7 @@ def main(args:argparse.Namespace) -> None:
 
     while trainer.stage is not None:
         model_trainer = subprocess.Popen(
-            args.trainer or shlex.split(config['trainer']),
+            (args.trainer or shlex.split(config['trainer'])) + trainer.stage.arguments,
             stdin=subprocess.PIPE,
             encoding="utf-8",
             preexec_fn=ignore_sigint) # ignore_sigint makes marian ignore Ctrl-C. We'll stop it from here.

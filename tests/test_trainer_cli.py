@@ -38,8 +38,6 @@ class TestArgumentParser(unittest.TestCase):
 
 	def test_early_stopping(self):
 		"""Test letting the trainer move to the next stage using early-stopping"""
-		head_lines = 10000
-
 		basepath = Path('contrib').absolute()
 
 		config = {
@@ -51,14 +49,20 @@ class TestArgumentParser(unittest.TestCase):
 						'start',
 						'mid',
 				],
-				'start': [
+				'start': {
+					'mix': [
 						'clean 1.0',
 						'until clean inf'
-				],
-				'mid': [
+					],
+					'arguments': ['5000']
+				},
+				'mid': {
+					'mix': [
 						'medium 1.0',
 						'until medium inf',
-				],
+					],
+					'arguments': ['10000']
+				},
 				'seed': 1111
 		}
 
@@ -72,7 +76,7 @@ class TestArgumentParser(unittest.TestCase):
 				'--do-not-resume',
 				'--no-shuffle',
 				'--config', str(Path(tmp) / 'config.yml'),
-				'head', '-n', str(head_lines)
+				'head', '-n', # plus value for n, per stage
 			], stdout=fout, stderr=ferr)
 
 			retval = child.wait(30)
@@ -84,4 +88,8 @@ class TestArgumentParser(unittest.TestCase):
 
 			# Assert we got the number of lines we'd expect
 			line_count = sum(1 for _ in fout)
-			self.assertEqual(line_count, len(config['stages']) * head_lines)
+			expected_line_count = sum(
+				int(config[stage]['arguments'][0])
+				for stage in config['stages']
+			)
+			self.assertEqual(line_count, expected_line_count)

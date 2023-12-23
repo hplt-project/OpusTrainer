@@ -95,12 +95,12 @@ trainer: /path/to/trainer/run.py
 ```
 
 ### Number of fields
-If `num_fields` is provided, at read time, the trainer will strip any extra TSV fields that the dataset contains (such as optinal alignment field that you are not going to use). Furthermore, any line that doesn't have enough fields gets filtered (eg lines missing alignment info when you do actually care about alignment).
+If `num_fields` is provided, at read time, the trainer will strip any extra TSV fields that the dataset contains (such as optional alignment field that you are not going to use). Furthermore, any line that doesn't have enough fields gets filtered (eg lines missing alignment info when you do actually care about alignment).
 
 ### Extended stage configuration
-If you want to change which modifiers are used for a specific stage, you can the extended stage configuration format. If a `modifiers` is mentioned here, it will override the curriculum-wide defined `modifiers` for just this stage.
+If you want to change which modifiers are used for a specific stage, you can the extended stage configuration format.
 
-In the extended format, the list of datasets is defined in the `mix` key. You can optionally add a `modifiers` key. For example: 
+In the extended format, the list of datasets is defined in the `mix` key. You can optionally add a `modifiers` and `arguments` key. For example: 
 
 ```yaml
 start:
@@ -110,9 +110,15 @@ start:
   - dirty 0
   - until clean 2 # Until two epochs of clean
   modifiers:
-    - UpperCase: 0.05
-    - TitleCase: 0.05
+  - UpperCase: 0.05
+  - TitleCase: 0.05
+  arguments:
+  - "--stop-early"
 ```
+
+If a `modifiers` is mentioned here, it will override the curriculum-wide defined `modifiers` for just this stage.
+
+If the optional `arguments` key is added, it will be appended to the end of the arguments list of the trainer argument.
 
 Note that you can use YAML references if you wish to extensively combine global and local modifiers.
 

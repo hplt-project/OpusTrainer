@@ -259,7 +259,8 @@ class TestCurriculumLoader(unittest.TestCase):
 				],
 				until_dataset='clean',
 				until_epoch=5,
-				modifiers=None)
+				modifiers=None,
+				arguments=[])
 		})
 		self.assertEqual(curriculum.seed, 1111)
 		self.assertEqual(len(curriculum.modifiers), 1)
