@@ -9,7 +9,7 @@ from collections import Counter
 from contextlib import closing
 from textwrap import dedent
 from io import StringIO
-from itertools import chain
+from itertools import chain, islice
 
 import yaml
 
@@ -173,10 +173,11 @@ class TestTrainer(unittest.TestCase):
 
 			# Train on trainer1
 			with closing(Trainer(curriculum)) as trainer1:
-				batches = [batch for _, batch in zip(range(10), state_tracker.run(trainer1))]
+				batches = list(islice(state_tracker.run(trainer1), 10))
 
 			# Resume on trainer2
 			with closing(Trainer(curriculum)) as trainer2:
+				state_tracker.restore(trainer2)
 				batches.extend(state_tracker.run(trainer2))
 			
 		self.assertEqual(batches, batches_ref)

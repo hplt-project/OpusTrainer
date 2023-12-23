@@ -1,10 +1,12 @@
 #!/usr/bin/env python3
 import unittest
-import yaml
 import sys
 from subprocess import Popen
 from pathlib import Path
 from tempfile import TemporaryDirectory, TemporaryFile
+
+import yaml
+
 from opustrainer.trainer import parse_args
 
 
@@ -60,7 +62,7 @@ class TestArgumentParser(unittest.TestCase):
 				'seed': 1111
 		}
 
-		with TemporaryDirectory() as tmp, TemporaryFile() as fout:
+		with TemporaryDirectory() as tmp, TemporaryFile() as fout, TemporaryFile() as ferr:
 			with open(Path(tmp) / 'config.yml', 'w+t') as fcfg:
 				yaml.safe_dump(config, fcfg)
 
@@ -71,13 +73,15 @@ class TestArgumentParser(unittest.TestCase):
 				'--no-shuffle',
 				'--config', str(Path(tmp) / 'config.yml'),
 				'head', '-n', str(head_lines)
-			], stdout=fout)
+			], stdout=fout, stderr=ferr)
+
+			retval = child.wait(30)
+			fout.seek(0)
+			ferr.seek(0)
 
 			# Assert we exited neatly
-			retval = child.wait(30)
-			self.assertEqual(retval, 0)
+			self.assertEqual(retval, 0, msg=ferr.read().decode())
 
 			# Assert we got the number of lines we'd expect
-			fout.seek(0)
 			line_count = sum(1 for _ in fout)
 			self.assertEqual(line_count, len(config['stages']) * head_lines)
