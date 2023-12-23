@@ -1,0 +1,18 @@
+# Datasets are already TSV files
+datasets:
+  clean: test-data/clean.zhen.10
+
+stages:
+  - start
+
+start:
+  - clean  1
+  - until clean 1
+
+modifiers:
+  # No UpperCase or TitleCase modifier when the source is Chinese as we can't upper or lowercase Chinese
+  - Tags: 0.1
+    custom_detok_src: zh
+
+seed: 1111
+trainer: cat

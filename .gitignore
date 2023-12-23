@@ -1,0 +1,8 @@
+*.state
+.vscode
+.venv
+*__pycache__*
+*.egg-info/
+wheelhouse/*
+build/*
+*.whl

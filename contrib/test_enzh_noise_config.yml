@@ -1,0 +1,25 @@
+# Datasets are already TSV files
+datasets:
+  clean: test-data/clean.enzh.10
+
+stages:
+  - start
+
+start:
+  - clean  1
+  - until clean 1
+
+modifiers:
+  - UpperCase: 0.2
+  - TitleCase: 0.2
+  - Tags: 0.1
+    custom_detok_src: null # Null value for the src detokenizer
+    custom_detok_trg: zh
+    augment: 0.4 # 0.4 out of the time tags is triggered, instead augment the source and the target with random noise
+    replace: 0.4 # =====//=====, instead replace the target token with random noise, and use that random noise to tag a corresponding source word
+    # template: "__source__ {src} __target__ {trg} __done__" # This is the default way of inserting tags.
+    # We STRONGLY DISCOURAGE the modification of this line and in fact it shouldn't be included in the config
+    # unless you really know what you are doing.
+
+seed: 1111
+trainer: cat

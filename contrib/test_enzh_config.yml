@@ -1,0 +1,34 @@
+# Datasets are already TSV files
+datasets:
+  clean: test-data/clean.enzh.10
+
+stages:
+  - start
+
+start:
+  - clean  1
+  - until clean 1
+
+modifiers:
+  - UpperCase: 0.2
+  - TitleCase: 0.2
+  - Typos: 0.2
+  - Tags: 0.1
+    custom_detok_src: null # Null value for the src detokenizer
+    custom_detok_trg: zh
+    template: "__source__ {src} __target__ {trg} __done__" # This is the default way of inserting tags.
+    # We STRONGLY DISCOURAGE the modification of this line and in fact it shouldn't be included in the config
+    # unless you really know what you are doing.
+    # Testing the parsing those values. The 0 means that whenever this modifier takes effect (probability 0.1)
+    # Out of those times, there's `augment` fraction of chance of adding untagged noise to both sides instead of tags
+    # and `replace` fraction of chance of adding placeholder tags, but replace the expected target with noise.
+    augment: 0
+    replace: 0
+ # - Prefix: 0.2 # Prefix must always be used after tags, but ideally never used together with tags
+ #   min_words: 2
+ #   max_words: 5
+    #template: "__start__ {trg} __end__ " # # We STRONGLY DISCOURAGE the modification of this line and in fact it shouldn't be included in the config
+    # unless you really know what you are doing.
+
+seed: 1111
+trainer: cat

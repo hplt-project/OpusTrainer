@@ -1,0 +1,46 @@
+# Datasets are already TSV files
+datasets:
+  clean: test-data/clean
+  medium: test-data/medium
+  dirty: test-data/dirty
+
+stages:
+  - start
+  - mid
+  - end
+
+start:
+  - clean  0.8
+  - medium 0.2
+  - dirty  0
+  - until clean 2 # Until two epochs of clean
+
+mid:
+  - clean  0.6
+  - medium 0.3
+  - dirty  0.1
+  - until medium 1
+
+end:
+  - clean  0.4
+  - medium 0.3
+  - dirty  0.3
+  - until dirty 5 # use `inf` to mean until forever
+
+modifiers:
+  - UpperCase: 0.05
+  - TitleCase: 0.05
+  #- Tags: 0.08 # Requires dataset augmented with alignment info
+  #  custom_detok_src: null # Null value for the src detokenizer
+  #  custom_detok_trg: zh
+  # template: "__source__ {src} __target__ {trg} __done__" # This is the default way of inserting tags.
+    # We STRONGLY DISCOURAGE the modification of this line and in fact it shouldn't be included in the config
+    # unless you really know what you are doing.
+  # - Prefix: 0.05 #
+  #  min_words: 2
+  #  max_words: 5
+    #template: "__start__ {trg} __end__ " # # We STRONGLY DISCOURAGE the modification of this line and in fact it shouldn't be included in the config
+    # unless you really know what you are doing.
+
+seed: 1111
+trainer: /usr/bin/cat
