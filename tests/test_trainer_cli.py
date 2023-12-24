@@ -54,14 +54,14 @@ class TestArgumentParser(unittest.TestCase):
 						'clean 1.0',
 						'until clean inf'
 					],
-					'arguments': ['5000']
+					'arguments': '-n 5000'
 				},
 				'mid': {
 					'mix': [
 						'medium 1.0',
 						'until medium inf',
 					],
-					'arguments': ['10000']
+					'arguments': '-n 10000'
 				},
 				'seed': 1111
 		}
@@ -76,7 +76,7 @@ class TestArgumentParser(unittest.TestCase):
 				'--do-not-resume',
 				'--no-shuffle',
 				'--config', str(Path(tmp) / 'config.yml'),
-				'head', '-n', # plus value for n, per stage
+				'head', # plus value for -n, per stage
 			], stdout=fout, stderr=ferr)
 
 			retval = child.wait(30)
@@ -89,7 +89,7 @@ class TestArgumentParser(unittest.TestCase):
 			# Assert we got the number of lines we'd expect
 			line_count = sum(1 for _ in fout)
 			expected_line_count = sum(
-				int(config[stage]['arguments'][0])
+				int(config[stage]['arguments'][3:]) # interpret the `-n XXX`
 				for stage in config['stages']
 			)
 			self.assertEqual(line_count, expected_line_count)

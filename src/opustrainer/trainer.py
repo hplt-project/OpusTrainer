@@ -496,7 +496,7 @@ class CurriculumV1Loader:
                 until_dataset=until_dataset_name,
                 until_epoch=until_epoch,
                 modifiers=self._load_modifiers(ymldata[stage_name], basepath) if isinstance(ymldata[stage_name], dict) and 'modifiers' in ymldata[stage_name] else None,
-                arguments=[str(arg) for arg in ymldata[stage_name]['arguments']] if isinstance(ymldata[stage_name], dict) and 'arguments' in ymldata[stage_name] else [],
+                arguments=shlex.split(ymldata[stage_name]['arguments']) if isinstance(ymldata[stage_name], dict) and 'arguments' in ymldata[stage_name] else [],
             )
         except Exception as exc:
             raise CurriculumLoaderError(f"could not complete the parse of stage '{stage_name}': {exc!s}") from exc
@@ -839,9 +839,13 @@ def main(args:argparse.Namespace) -> None:
     # Make trainer listen to `kill -SIGUSR1 $PID` to print dataset progress
     signal.signal(signal.SIGUSR1, lambda signum, handler: print_state(trainer.state()))
 
+    # Trainer is whatever is in config['trainer'], unless you specified it on
+    # the cli. If neither is specified, this will raise an KeyError.
+    model_trainer_cmd = args.trainer or shlex.split(config['trainer'])
+
     while trainer.stage is not None:
         model_trainer = subprocess.Popen(
-            (args.trainer or shlex.split(config['trainer'])) + trainer.stage.arguments,
+            model_trainer_cmd + trainer.stage.arguments,
             stdin=subprocess.PIPE,
             encoding="utf-8",
             preexec_fn=ignore_sigint) # ignore_sigint makes marian ignore Ctrl-C. We'll stop it from here.
