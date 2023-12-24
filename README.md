@@ -112,13 +112,12 @@ start:
   modifiers:
   - UpperCase: 0.05
   - TitleCase: 0.05
-  arguments:
-  - "--stop-early"
+  arguments: --stop-early
 ```
 
 If a `modifiers` is mentioned here, it will override the curriculum-wide defined `modifiers` for just this stage.
 
-If the optional `arguments` key is added, it will be appended to the end of the arguments list of the trainer argument.
+If the optional `arguments` key is added, it will be appended to the end of the trainer command.
 
 Note that you can use YAML references if you wish to extensively combine global and local modifiers.
 
