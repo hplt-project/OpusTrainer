@@ -3,6 +3,10 @@ The purpose of the trainer is to provide the user with a flexible way of schedul
 
 Alternatively, this tool is particularly suited to training multilingual models, as it provides an easy way to define the desired mixture of datasets from different language sources.
 
+## Paper
+
+[OpusCleaner and OpusTrainer, open source toolkits for training Machine Translation and Large language models](https://arxiv.org/abs/2311.14838)
+
 ## Installation
 You've got two options: Install directly from PyPI:
 
