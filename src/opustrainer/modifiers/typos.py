@@ -212,7 +212,7 @@ class TypoModifier(Modifier):
 
     def __call__(self, batch: List[str]) -> Iterable[str]:
         for line in batch:
-            yield self.apply(line)
+            yield self.apply(line) if self.probability > random.random() else line
 
     def apply(self, line:str) -> str:
         fields = line.split("\t")
