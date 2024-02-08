@@ -54,19 +54,19 @@ class MergeModifier(Modifier):
          max_lines: 4
         ```
     """
-    min_lines_merge: int
-    max_lines_merge: int
+    min_lines: int
+    max_lines: int
 
-    def __init__(self, probability: float, min_lines_merge: int=2, max_lines_merge: int=4):
+    def __init__(self, probability: float, min_lines: int=2, max_lines: int=4):
         super().__init__(probability)
-        self.min_lines_merge = min_lines_merge
-        self.max_lines_merge = max_lines_merge
+        self.min_lines = min_lines
+        self.max_lines = max_lines
 
     def __call__(self, batch:List[str]) -> Iterable[str]:
         i = 0
         while i < len(batch):
             if self.probability > random.random():
-                merge_size = random.randint(self.min_lines_merge, self.max_lines_merge)
+                merge_size = random.randint(self.min_lines, self.max_lines)
                 yield merge_sents(batch[i:i+merge_size])
                 i += merge_size
             else:
