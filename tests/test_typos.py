@@ -25,12 +25,11 @@ class TestTypos(unittest.TestCase):
 		modifier = TypoModifier(1.0)
 		output = [line.split('\t') for line in modifier(["\t".join(line) for line in INPUT_DATA])]
 		# Assert first column is modified
-		self.assertEqual([row[0] for row in output], [
-			'This s a sentence.',
-			'Why are we doiing this?',
-			'88T6683648',
-			'---'
-		])
+		self.assertEqual([row[0] for row in output],[
+			'Thisis a sentence.',
+			'Why are we doing this?',
+			'88766863648',
+			'---'])
 		# Assert second column is untouched.
 		self.assertEqual([row[1] for row in output], [row[1] for row in INPUT_DATA])
 
@@ -40,11 +39,10 @@ class TestTypos(unittest.TestCase):
 		modifier = TypoModifier(1.0, extra_char=1.0, random_space=1.0)
 		output = [line.split('\t') for line in modifier(["\t".join(line) for line in INPUT_DATA])]
 		self.assertEqual([row[0] for row in output], [
-			'Tyhis  is a sentence.',
-			'W hy are we doing thjis?',
-			'8 8756683648',
-			'-- -'
-		])
+			'This is  a senftence.',
+			'Why ad re we doing this?',
+			'887 66836478',
+			'-- -'])
 
 	def test_trainer_with_typos(self):
 		"""Test Typos configuration being picked up by the trainer"""
@@ -74,14 +72,15 @@ class TestTypos(unittest.TestCase):
 		# Reference batches (trainer runs without resuming)
 		with closing(Trainer(curriculum)) as trainer:
 			batches = list(trainer.run())
-	
+
+
 		self.assertEqual(batches[0][:5], [
-			'cpl ean700\n',
-			'cleahn68 8\n',
-			'cle wan220\n',
-			'cl ean2841\n',
-			'c leabn179\n',
-		])
+			' cklean700\n',
+			'c klean688\n',
+			'cles an220\n',
+			'clesan 281\n',
+			'c lean17109\n']
+		)
 
 	def test_regression_40(self):
 		random.seed(1)
@@ -94,3 +93,10 @@ class TestTypos(unittest.TestCase):
 		modified = next(iter(modifier([line])))
 		self.assertNotEqual(modified, line) # test it changed
 		self.assertRegex(modified, r'^..\t.$') # test it has 1 extra char
+
+	def test_zero_prob(self):
+		"""Test probability parameter (if 0, no typos)"""
+		random.seed(1)
+		modifier = TypoModifier(0.0, extra_char=1.0, random_space=1.0)
+		output = [line.split('\t') for line in modifier(["\t".join(line) for line in INPUT_DATA])]
+		self.assertEqual([row[0] for row in output], [row[0] for row in INPUT_DATA])
