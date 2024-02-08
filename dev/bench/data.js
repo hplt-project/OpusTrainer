@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1704749065020,
+  "lastUpdate": 1707405408760,
   "repoUrl": "https://github.com/hplt-project/OpusTrainer",
   "entries": {
     "Benchmark": [
@@ -623,6 +623,45 @@ window.BENCHMARK_DATA = {
           {
             "name": "Tags with SPM",
             "value": 55068300862,
+            "unit": "ns"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "jelmer@ikhoefgeen.nl",
+            "name": "Jelmer",
+            "username": "jelmervdl"
+          },
+          "committer": {
+            "email": "noreply@github.com",
+            "name": "GitHub",
+            "username": "web-flow"
+          },
+          "distinct": true,
+          "id": "4fceac9aef0af9d0b4bbc207ebbed53d2f5d5b22",
+          "message": "Merge pull request #51 from mozilla/fix_typos_probs\n\nUse line modification probability in typos",
+          "timestamp": "2024-02-08T15:14:11Z",
+          "tree_id": "ce8988def6f0702c29a7aabaea4d3501234110dd",
+          "url": "https://github.com/hplt-project/OpusTrainer/commit/4fceac9aef0af9d0b4bbc207ebbed53d2f5d5b22"
+        },
+        "date": 1707405408353,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "Baseline",
+            "value": 2444361678,
+            "unit": "ns"
+          },
+          {
+            "name": "Tags",
+            "value": 37253350737,
+            "unit": "ns"
+          },
+          {
+            "name": "Tags with SPM",
+            "value": 54862580049,
             "unit": "ns"
           }
         ]
