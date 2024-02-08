@@ -1,0 +1,60 @@
+
+datasets:
+  clean: test-data/clean
+  medium: test-data/medium
+  dirty: test-data/dirty
+
+stages:
+  - start
+  - mid
+  - end
+
+start:
+  - clean  0.8
+  - medium 0.2
+  - dirty  0
+  - until clean 2
+
+mid:
+  - clean  0.6
+  - medium 0.3
+  - dirty  0.1
+  - until medium 1
+
+end:
+  - clean  0.4
+  - medium 0.3
+  - dirty  0.3
+  - until dirty 5
+
+modifiers:
+  - UpperCase: 0.05
+  - TitleCase: 0.05
+  - Prefix: 0.05
+    min_words: 2
+    max_words: 5
+    template: "__start__ {trg} __end__ "
+  - Merge: 0.01
+    min_lines: 2
+    max_lines: 4
+  - Noise: 0.0005
+    min_word_length: 2 # Minimum word length for each word in the noisy sentence
+    max_word_length: 5 # Maximum word length for each word in the noisy sentence
+    max_words: 6 # Maximum number of words in each noisy sentence
+  - Typos: 0.05
+    char_swap:     0.1 # Swaps two random consecutive word characters in the string.
+    missing_char:  0.1 # Skips a random word character in the string.
+    extra_char:    0.1 # Adds an extra, keyboard-neighbor, letter next to a random word character.
+    nearby_char:   0.1 # Replaces a random word character with keyboard-neighbor letter.
+    similar_char:  0.1 # Replaces a random word character with another visually similar character.
+    skipped_space: 0.1 # Skips a random space from the string.
+    random_space:  0.1 # Adds a random space in the string.
+    repeated_char: 0.1 # Repeats a random word character.
+    unichar:       0.1 # Replaces a random consecutive repeated letter with a single letter.
+  - Tags: 0.08
+    custom_detok_src: null
+    custom_detok_trg: zh
+    template: "__source__ {src} __target__ {trg} __done__"
+
+seed: 1111
+trainer: /usr/bin/cat

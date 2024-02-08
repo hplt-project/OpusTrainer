@@ -23,10 +23,10 @@ class NoiseModifier(Modifier):
     max_word_length: int
     max_words: int
 
-    def __init__(self, probability: float, min_word_legnth: int=2,
-        max_word_length: int=5, max_words: int=6):
+    def __init__(self, probability: float, min_word_length: int=2,
+                 max_word_length: int=5, max_words: int=6):
         super().__init__(probability)
-        self.min_word_length = min_word_legnth
+        self.min_word_length = min_word_length
         self.max_word_length = max_word_length
         self.max_words = max_words
 
