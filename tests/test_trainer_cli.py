@@ -35,7 +35,11 @@ class TestArgumentParser(unittest.TestCase):
 		self.assertEqual({**vars(parsed), **expected}, vars(parsed))
 
 	def test_config_loader(self):
-		config_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'test_config.yml')
+		config_path = os.path.join(
+			os.path.dirname(os.path.abspath(__file__)),
+			os.pardir,
+			'contrib',
+			'test_full_config.yml')
 		with open(config_path, 'r', encoding='utf-8') as fh:
 			config = yaml.safe_load(fh)
 

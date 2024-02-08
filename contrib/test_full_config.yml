@@ -30,10 +30,6 @@ end:
 modifiers:
   - UpperCase: 0.05
   - TitleCase: 0.05
-  - Tags: 0.08
-    custom_detok_src: null
-    custom_detok_trg: zh
-    template: "__source__ {src} __target__ {trg} __done__"
   - Prefix: 0.05
     min_words: 2
     max_words: 5
@@ -55,7 +51,10 @@ modifiers:
     random_space:  0.1 # Adds a random space in the string.
     repeated_char: 0.1 # Repeats a random word character.
     unichar:       0.1 # Replaces a random consecutive repeated letter with a single letter.
-
+  - Tags: 0.08
+    custom_detok_src: null
+    custom_detok_trg: zh
+    template: "__source__ {src} __target__ {trg} __done__"
 
 seed: 1111
 trainer: /usr/bin/cat
