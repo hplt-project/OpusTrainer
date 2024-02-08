@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1707405408760,
+  "lastUpdate": 1707406272650,
   "repoUrl": "https://github.com/hplt-project/OpusTrainer",
   "entries": {
     "Benchmark": [
@@ -662,6 +662,45 @@ window.BENCHMARK_DATA = {
           {
             "name": "Tags with SPM",
             "value": 54862580049,
+            "unit": "ns"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "jelmer@ikhoefgeen.nl",
+            "name": "Jelmer",
+            "username": "jelmervdl"
+          },
+          "committer": {
+            "email": "noreply@github.com",
+            "name": "GitHub",
+            "username": "web-flow"
+          },
+          "distinct": true,
+          "id": "c966d7b353d6b3c6a09d9573f1ab6ba3221c1d21",
+          "message": "Merge pull request #52 from mozilla/fix_config_parsing\n\nFix names of parameters for merge and noise",
+          "timestamp": "2024-02-08T15:27:00Z",
+          "tree_id": "bce789baaccd255106d2dfb016e66e07dd3e3906",
+          "url": "https://github.com/hplt-project/OpusTrainer/commit/c966d7b353d6b3c6a09d9573f1ab6ba3221c1d21"
+        },
+        "date": 1707406271701,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "Baseline",
+            "value": 3653002179,
+            "unit": "ns"
+          },
+          {
+            "name": "Tags",
+            "value": 36845662445,
+            "unit": "ns"
+          },
+          {
+            "name": "Tags with SPM",
+            "value": 53917514609,
             "unit": "ns"
           }
         ]
