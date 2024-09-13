@@ -697,10 +697,35 @@ class Trainer:
 
         return self.stage
 
+    def log_stage_information(self):
+        if not self.stage:
+            return
+
+        logger.log(f'Starting stage: "{self.stage.name}"')
+        if self.stage.until_epoch:
+            logger.log(
+                f'Running until dataset "{self.stage.until_dataset}" for {self.stage.until_epoch} epoch(s)'
+            )
+        else:
+            logger.log(f'Running until dataset "{self.stage.until_dataset}"')
+
+        if self.curriculum.modifiers:
+            logger.log("Using curriculum modifiers:")
+            for modifier in self.curriculum.modifiers:
+                name = type(modifier).__name__
+                logger.log(f" - {name} ({modifier.probability})")
+
+        if self.stage.modifiers:
+            logger.log("Using stage modifiers:")
+            for modifier in self.stage.modifiers:
+                name = type(modifier).__name__
+                logger.log(f" - {name} ({modifier.probability})")
+
     def run(self, *, batch_size:int=100, chunk_size:int=16, processes:int=0) -> Iterable[List[str]]:
         """Yield batches, moving through the stages of training as datasets are consumed."""
         while self.stage is not None:
-            logger.log(f"Starting stage {self.stage.name}")
+            self.log_stage_information()
+
             # Stage level modifiers take precedence over global modifiers,
             # but you can combine them yourself using YAML references.
             if self.stage.modifiers is not None:
@@ -733,7 +758,7 @@ class Trainer:
 
             # Move onto next stage. May be `None`, which would end this generator
             self.next_stage()
-
+        logger.log("Finished the last stage")
 
 class StateTracker:
     """Wraps around the trainer.run() call to restore and dump state its."""
