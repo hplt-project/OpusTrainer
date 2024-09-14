@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1707406272650,
+  "lastUpdate": 1726316978845,
   "repoUrl": "https://github.com/hplt-project/OpusTrainer",
   "entries": {
     "Benchmark": [
@@ -701,6 +701,45 @@ window.BENCHMARK_DATA = {
           {
             "name": "Tags with SPM",
             "value": 53917514609,
+            "unit": "ns"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "jelmer@ikhoefgeen.nl",
+            "name": "Jelmer",
+            "username": "jelmervdl"
+          },
+          "committer": {
+            "email": "noreply@github.com",
+            "name": "GitHub",
+            "username": "web-flow"
+          },
+          "distinct": true,
+          "id": "7be3b4dcc711d740b4b1a48d91a9b0a13d4ea276",
+          "message": "Merge pull request #59 from gregtatum/better-logs\n\nAdd more information to the log on the current stage",
+          "timestamp": "2024-09-14T13:27:01+01:00",
+          "tree_id": "b549f0a174200e6eda528529ab16fa2b09aa3d32",
+          "url": "https://github.com/hplt-project/OpusTrainer/commit/7be3b4dcc711d740b4b1a48d91a9b0a13d4ea276"
+        },
+        "date": 1726316978035,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "Baseline",
+            "value": 2603995032,
+            "unit": "ns"
+          },
+          {
+            "name": "Tags",
+            "value": 36414087390,
+            "unit": "ns"
+          },
+          {
+            "name": "Tags with SPM",
+            "value": 54019069800,
             "unit": "ns"
           }
         ]
