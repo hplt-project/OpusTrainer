@@ -1,4 +1,5 @@
-[2023-07-04 02:48:11] [Trainer] [INFO] Starting stage start
+[2023-07-04 02:48:11] [Trainer] [INFO] Starting stage: "start"
+[2023-07-04 02:48:11] [Trainer] [INFO] Running until dataset "clean" for 1 epoch(s)
 [2023-07-04 02:48:11] [Trainer] [INFO] Reading clean for epoch 0
 [2023-07-04 02:48:11] [Trainer] [INFO] Reading clean for epoch 1
 [2023-07-04 02:48:11] [Trainer] [INFO] Reading clean for epoch 2
@@ -9,4 +10,5 @@
 [2023-07-04 02:48:12] [Trainer] [INFO] Reading clean for epoch 7
 [2023-07-04 02:48:12] [Trainer] [INFO] Reading clean for epoch 8
 [2023-07-04 02:48:12] [Trainer] [INFO] Reading clean for epoch 9
+[2023-07-04 02:48:12] [Trainer] [INFO] Finished the last stage
 [2023-07-04 02:48:12] [Trainer] [INFO] waiting for trainer to exit. Press ctrl-c to be more aggressive
