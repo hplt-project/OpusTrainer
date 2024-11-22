@@ -18,7 +18,7 @@ jobs:
 
       - name: Run tests
         run: |-
-          apt-get install python3-icu
+          sudo apt-get install -y python3-icu
           pip install .
           python -m unittest discover -s tests
 
