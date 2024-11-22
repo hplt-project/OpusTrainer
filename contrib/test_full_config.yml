@@ -52,8 +52,8 @@ modifiers:
     repeated_char: 0.1 # Repeats a random word character.
     unichar:       0.1 # Replaces a random consecutive repeated letter with a single letter.
   - Tags: 0.08
-    custom_detok_src: null
-    custom_detok_trg: zh
+    custom_detok_src: "moses:null"
+    custom_detok_trg: "moses:zh"
     template: "__source__ {src} __target__ {trg} __done__"
 
 seed: 1111

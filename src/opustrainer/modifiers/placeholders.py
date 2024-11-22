@@ -5,7 +5,8 @@ from typing import Set, List, Tuple, Optional, TypeVar, Iterable
 
 from opustrainer.alignments import Pair, parse_alignments, format_alignments
 from opustrainer.modifiers import Modifier
-from opustrainer.tokenizers import SpaceDetokenizer, SpaceTokenizer, MosesDetokenizer, SentencePieceTokenizer
+from opustrainer.tokenizers import SpaceDetokenizer, SpaceTokenizer, SentencePieceTokenizer, \
+    make_detokenizer, ICU_WHITESPACE_TOKEN
 from opustrainer.modifiers.retokenize import Retokenizer, remap_alignment_pairs
 from opustrainer import logger
 
@@ -231,8 +232,8 @@ class PlaceholderTagModifier(Modifier):
        ```yaml
        modifiers:
        - Tags: 0.02
-         custom_detok_src: 'zh'
-         custom_detok_trg: null
+         custom_detok_src: 'moses:zh'
+         custom_detok_trg: "moses:null"
          template: "__source__ {src} __target__ {trg} __done__"
          augment: 0.0 # 0% chance to just insert a random string on both sides
          replace: 0.0 # 0% change to use tags to force translate to a random string
@@ -252,18 +253,20 @@ class PlaceholderTagModifier(Modifier):
 
     def __init__(self, probability: float=0.0, custom_detok_src: Optional[str]=None, custom_detok_trg: Optional[str]=None,
         spm_vocab: Optional[Path]=None,
-        template: str="__source__ {src} __target__ {trg} __done__", augment: float=0, replace:float=0):
+        template: str="__source__ {src} __target__ {trg} __done__", augment: float=0, replace:float=0, tag:float=1):
         super().__init__(probability)
 
         self.template = template
+        self.custom_detok_src = custom_detok_src
+        self.custom_detok_trg = custom_detok_trg
 
         self.src_retokenizer = Retokenizer(
-            detokenizer=MosesDetokenizer(custom_detok_src) if custom_detok_src else SpaceDetokenizer(),
+            detokenizer=make_detokenizer(custom_detok_src) if custom_detok_src else SpaceDetokenizer(),
             tokenizer=SentencePieceTokenizer(spm_vocab) if spm_vocab else SpaceTokenizer()
         )
 
         self.trg_retokenizer = Retokenizer(
-            detokenizer=MosesDetokenizer(custom_detok_trg) if custom_detok_trg else SpaceDetokenizer(),
+            detokenizer=make_detokenizer(custom_detok_trg) if custom_detok_trg else SpaceDetokenizer(),
             tokenizer=SentencePieceTokenizer(spm_vocab) if spm_vocab else SpaceTokenizer()
         )
 
@@ -281,7 +284,13 @@ class PlaceholderTagModifier(Modifier):
         if replace > 0:
             self.modes.append(('replace', replace))
 
-        self.modes.append(('tag', 1.0)) # Weight doesn't matter as long as cumsum => 1.0, it's last on the list anyway
+        # the modifier can be used for inline noise augmentation only
+        if tag > 0:
+            self.modes.append(('tag', tag))
+
+        if ({'replace', 'tag'} & {mode for mode,_ in self.modes}) and \
+            'icu' in ((self.custom_detok_trg or '') + (self.custom_detok_trg or '')):
+            raise ValueError('ICU tokenization is not supported with "tag" and "replace" modes')
 
     def __call__(self, batch: List[str]) -> Iterable[str]:
         for line in batch:
@@ -293,7 +302,7 @@ class PlaceholderTagModifier(Modifier):
     def apply(self, line:str) -> str:
         """Applies tag to words in a line based on alignment info, and then removes the alignment info from the line.
            This is used to enable terminology support by tagging random words with their translation.
-           eg "I like cake" would become "I __source__ like __target__ gusta __done__ cake. 
+           eg "I like cake" would become "I __source__ like __target__ gusta __done__ cake.
            By default the detokenizer used is the trivial detokenizer, but we can instead have separate detokenizers on src and trg."
         """
 
@@ -333,7 +342,7 @@ class PlaceholderTagModifier(Modifier):
                 continue
             
             # Select mode (skip random_weighted_choices*() when 'tag' is the only mode)
-            mode = random_weighted_choice(self.modes) if len(self.modes) > 1 else 'tag'
+            mode = random_weighted_choice(self.modes) if len(self.modes) > 1 else self.modes[0][0]
 
             if mode == "tag" or mode == "replace":
                 if mode == "tag":
@@ -375,19 +384,19 @@ class PlaceholderTagModifier(Modifier):
                 # Augment mode adds random noise both on the source and the target without any
                 # tagging encouraging the model to copy crap from one side to the other.
                 augment_tokens = get_random_unicode_words()
-                source = source[:candidate.src+1] + augment_tokens + source[candidate.src+1:]
-                target = target[:candidate.trg+1] + augment_tokens + target[candidate.trg+1:]
+                source, num_src_aug_tokens, pos_aug_src = self.insert_augmented(augment_tokens, source, candidate.src+1, self.custom_detok_src)
+                target, num_trg_aug_tokens, pos_aug_trg = self.insert_augmented(augment_tokens, target, candidate.trg+1, self.custom_detok_trg)
 
                 # Fix up alignment pairs
                 alignments = (
                     # pairs before and including the candidate stay the same
                     alignments[:candidate_index+1]
                     # fill in the gap created by the added random noise
-                    + [Pair(candidate.src + n, candidate.trg + n) for n in range(1, len(augment_tokens) + 1)]
+                    + [Pair(candidate.src + n_src, candidate.trg + n_trg) for n_src, n_trg in zip(pos_aug_src, pos_aug_trg)]
                     # pairs after the replaced bit have to be offset by the length of the replacement bit
-                    + [Pair(pair.src + len(augment_tokens), pair.trg + len(augment_tokens)) for pair in alignments[candidate_index+1:]]
+                    + [Pair(pair.src + num_src_aug_tokens, pair.trg + num_trg_aug_tokens) for pair in alignments[candidate_index+1:]]
                 )
-                candidate_offset = candidate_index + len(augment_tokens) + 1
+                candidate_offset = candidate_index + min(num_src_aug_tokens, num_trg_aug_tokens) + 1
 
         source_detok, _, source_mapping = self.src_retokenizer.retokenize(source)
         target_detok, _, target_mapping = self.trg_retokenizer.retokenize(target)
@@ -397,6 +406,46 @@ class PlaceholderTagModifier(Modifier):
             return source_detok + "\t" + target_detok + "\t" + format_alignments(remapped_pairs)
         else:
             return source_detok + "\t" + target_detok
+
+    def insert_augmented(self, augment_tokens: List[str], tokens: List[str], position: int, detokenization: str) -> Tuple[List[str], int, List[int]]:
+        """
+        Inserts augmented tokens.
+        Accounts for possible ICU detokenization which uses special symbol "▁" for whitespace tokens.
+            Such tokens will also be inserted to separate the augmented words.
+
+        Returns:
+            new tokens
+            number of augmented tokens including whitespaces for in ICU case
+            alignments positions for the augmented tokens (whitespaces are excluded, we don't need alignments for them)
+        """
+        prefix = tokens[:position]
+        postfix = tokens[position:]
+        aug_aln_offset = []
+
+        if detokenization is not None and "icu" in detokenization:
+            new_aug_tokens = []
+            aug_pos_index = 1
+
+            if len(prefix) > 0 and prefix[-1] != ICU_WHITESPACE_TOKEN:
+                new_aug_tokens.append(ICU_WHITESPACE_TOKEN)
+                aug_pos_index += 1
+
+            for token in augment_tokens:
+                new_aug_tokens.append(token)
+                # save the offset of the augmented words to use in alignments
+                aug_aln_offset.append(aug_pos_index)
+                new_aug_tokens.append(ICU_WHITESPACE_TOKEN)
+                aug_pos_index += 2
+
+            if len(postfix) > 0 and postfix[0] == ICU_WHITESPACE_TOKEN:
+                new_aug_tokens.pop()
+
+            augment_tokens = new_aug_tokens
+        else:
+            aug_aln_offset = list(range(1, len(augment_tokens) + 1))
+
+        tokens = prefix + augment_tokens + postfix
+        return tokens, len(augment_tokens), aug_aln_offset
 
     def validate(self, context:List[Modifier]) -> None:
         """Current limitation of the tags modifier is that any other modifier might modify the

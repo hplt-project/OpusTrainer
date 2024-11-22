@@ -33,6 +33,10 @@ class Retokenizer(NamedTuple):
 
         prev_j = 0
         for i, old_token_span in enumerate(old_token_spans):
+            # it is possible for ICU tokenizer whitespace token, return empty list
+            if old_token_span is None:
+                continue
+
             for j, new_token_span in enumerate(new_token_spans[prev_j:], start=prev_j):
                 prev_j = j
                 overlap = slice_cmp(old_token_span, new_token_span)
@@ -59,8 +63,8 @@ def remap_alignment_pairs(src_mapping:TokenMapping, trg_mapping:TokenMapping, al
     sentence pair.
     
     E.g. if you have
-    source-mapping: [0 => [3,4], 1 => [5]],
-    target-mapping: [0 => [0], 1 => [1]]
+    source-mapping: [0 => [3,4], 1 => [5], 2 => []],
+    target-mapping: [0 => [0], 1 => [1], 2 => []]
     alignments:     [(0,1), (1,1)]
     it will return  [
         (3,1), (4,1), # the [0 => [3,4]] mapping

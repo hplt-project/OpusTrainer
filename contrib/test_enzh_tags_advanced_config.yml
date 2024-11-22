@@ -15,8 +15,8 @@ start:
     - until clean 1
   modifiers:
     - Tags: 0.5
-      custom_detok_src: null
-      custom_detok_trg: null
+      custom_detok_src: "moses:null"
+      custom_detok_trg: "moses:null"
       template: "{src} __target__ {trg} __done__"
     - *modifiers
 
@@ -26,8 +26,8 @@ end:
     - until clean 1
   modifiers:
     - Tags: 0.5
-      custom_detok_src: null
-      custom_detok_trg: zh
+      custom_detok_src: "moses:null"
+      custom_detok_trg: "moses:zh"
       template: "{src} __target__ {trg} __done__"
     - *modifiers
 
