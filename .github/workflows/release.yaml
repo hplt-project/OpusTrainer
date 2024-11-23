@@ -18,8 +18,7 @@ jobs:
 
       - name: Run tests
         run: |-
-          sudo apt-get install -y pkg-config libicu-dev
-          pip install .[test]
+          pip install .
           python -m unittest discover -s tests
 
   build_sdist:

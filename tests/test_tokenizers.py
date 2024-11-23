@@ -2,7 +2,7 @@ import unittest
 
 from opustrainer.tokenizers import make_tokenizer, make_detokenizer
 
-
+@unittest.skip("requires installing pyicu")
 class TestTokenizers(unittest.TestCase):
 
   def test_tokenize_detokenize_icu_en(self):

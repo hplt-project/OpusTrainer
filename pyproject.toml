@@ -28,11 +28,6 @@ dependencies = [
     "typo==0.1.5"
 ]
 
-[project.optional-dependencies]
-test = [
-    "PyICU==2.8.1"
-]
-
 [project.scripts]
 opustrainer-train = "opustrainer.trainer:main"
 opustrainer-shuffle = "opustrainer.shuffle:main"
