@@ -257,6 +257,13 @@ class PlaceholderTagModifier(Modifier):
         super().__init__(probability)
 
         self.template = template
+
+        # uses Moses detokenizer by default
+        if custom_detok_src and ':' not in custom_detok_src:
+            custom_detok_src = f'moses:{custom_detok_src}'
+        if custom_detok_trg and ':' not in custom_detok_trg:
+            custom_detok_trg = f'moses:{custom_detok_trg}'
+
         self.custom_detok_src = custom_detok_src
         self.custom_detok_trg = custom_detok_trg
 

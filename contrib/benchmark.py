@@ -72,7 +72,7 @@ with NamedTemporaryFile('w') as testdata:
 				"modifiers": [
 					{
 						"Tags": 0.1,
-						"custom_detok_trg": "moses:zh"
+						"custom_detok_trg": "zh"
 					}
 				]
 			}
@@ -85,7 +85,7 @@ with NamedTemporaryFile('w') as testdata:
 				"modifiers": [
 					{
 						"Tags": 0.1,
-						"custom_detok_trg": "moses:zh",
+						"custom_detok_trg": "zh",
 						"spm_vocab": os.path.join(root, "test-data/vocab.zhen.spm")
 					}
 				]

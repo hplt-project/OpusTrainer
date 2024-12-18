@@ -54,8 +54,8 @@ class TestTagger(unittest.TestCase):
     retokenize the input, and update the alignments accordingly."""
     tagger = PlaceholderTagModifier(
       probability=0.25,
-      custom_detok_src='moses:en',
-      custom_detok_trg='moses:zh',
+      custom_detok_src='en',
+      custom_detok_trg='zh',
       spm_vocab='contrib/test-data/vocab.zhen.spm') # type: ignore Path vs String type issue
     
     output = tagger(['\t'.join([
@@ -124,8 +124,8 @@ class TestTagger(unittest.TestCase):
     retokenize the input, even if probability is 0."""
     tagger = PlaceholderTagModifier(
       probability=0.0,
-      custom_detok_src='moses:en',
-      custom_detok_trg='moses:zh',
+      custom_detok_src='en',
+      custom_detok_trg='zh',
       spm_vocab='contrib/test-data/vocab.zhen.spm') # type: ignore Path vs String type issue
     
     output = tagger(['\t'.join([
@@ -148,7 +148,7 @@ class TestTagger(unittest.TestCase):
     multiple modes are enabled."""
     tagger = PlaceholderTagModifier(
       probability=1.0,
-      custom_detok_src='moses:zh',
+      custom_detok_src='zh',
       augment=0.33,
       replace=0.33,
       # tag=0.33 is implicit

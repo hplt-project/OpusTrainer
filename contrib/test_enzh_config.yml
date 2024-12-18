@@ -14,8 +14,8 @@ modifiers:
   - TitleCase: 0.2
   - Typos: 0.2
   - Tags: 0.1
-    custom_detok_src: "moses:null" # Null value for the src detokenizer
-    custom_detok_trg: "moses:zh"
+    custom_detok_src: null # Null value for the src detokenizer
+    custom_detok_trg: zh
     template: "__source__ {src} __target__ {trg} __done__" # This is the default way of inserting tags.
     # We STRONGLY DISCOURAGE the modification of this line and in fact it shouldn't be included in the config
     # unless you really know what you are doing.

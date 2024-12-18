@@ -504,8 +504,8 @@ class CurriculumV1Loader:
           - TitleCase: 0.05
           - Tags: 0.02
             num_tags: 6
-            custom_detok_src: "moses:null"
-            custom_detok_trg: "moses:zh"
+            custom_detok_src: null
+            custom_detok_trg: zh
         ```
         """
         modifiers = [
