@@ -198,8 +198,8 @@ This modifier needs a third column in the training data with per-word (technical
 
 ```yaml
 - Tags: 0.05
-  custom_detok_src: null
-  custom_detok_trg: zh
+  custom_detok_src: "moses:null"
+  custom_detok_trg: "moses:zh"
   spm_vocab: path/to/vocab.enzh.spm
   template: "__source__ {src} __target__ {trg} __done__"
 ```
@@ -218,8 +218,8 @@ Sometimes we want to just replace the source token with the target token directl
 ```yml
 modifiers:
   - Tags: 0.1
-    custom_detok_src: null # Null value for the src detokenizer
-    custom_detok_trg: zh
+    custom_detok_src: "moses:null" # Null value for the src detokenizer
+    custom_detok_trg: "moses:zh"
     replace: 0.4 # 0.4 out of the time tags is triggered, instead replace the target token with random noise, and use that random noise to tag a corresponding source word.
 ```
 
@@ -229,8 +229,8 @@ If alignment information is present, we can augment the training data with inlin
 ```yml
 modifiers:
   - Tags: 0.1
-    custom_detok_src: null # Null value for the src detokenizer
-    custom_detok_trg: zh
+    custom_detok_src: "moses:null" # Null value for the src detokenizer
+    custom_detok_trg: "moses:zh"
     augment: 0.4 # 0.4 out of the time tags is triggered, instead augment the source and the target with random noise. If you want 100% only noise without tag functionality use augment: 1
 ```
 

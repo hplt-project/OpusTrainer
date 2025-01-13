@@ -11,12 +11,15 @@ from opustrainer.types import TokenList, TokenSpanList, Tokenizer, Detokenizer
 DETOKENIZERS = {
     'moses': lambda lang: MosesDetokenizer(lang),
     'spaces': lambda: SpaceDetokenizer(),
+    'icu': lambda lang: IcuDetokenizer(lang),
+
 }
 
 TOKENIZERS = {
     'moses': lambda lang: MosesTokenizer(lang),
     'spm': lambda vocab: SentencePieceTokenizer(vocab),
     'spaces': lambda: SpaceTokenizer(),
+    'icu': lambda lang: IcuTokenizer(lang),
 }
 
 
@@ -126,3 +129,72 @@ class SentencePieceTokenizer:
         tokens = [text[span] for span in spans]
         return tokens, spans
 
+# The same character as in SentencePiece
+ICU_WHITESPACE_TOKEN = "▁"
+class IcuTokenizer:
+    """
+    Tokenizes text by splitting words and punctuation using ICU segmenter.
+    Whitespaces will be preserved as a special token ▁ for lossless detokenization.
+    Requires installation with the steps specified in https://pypi.org/project/PyICU/
+    """
+
+    def __init__(self, lang: str):
+        self.lang = lang
+
+    def tokenize(self, text:str) -> Tuple[TokenList, TokenSpanList]:
+        from icu import BreakIterator, Locale
+
+        bi = BreakIterator.createWordInstance(Locale(self.lang))
+        bi.setText(text)
+
+        tokens = []
+        start = bi.first()
+        for end in bi:
+            token = text[start:end]
+            if (
+                token and token != "\n"
+            ):  # exclude empty tokens, but leave whitespaces and replace them with a special token
+                tokens.append(token)
+            start = end
+
+        spans: TokenSpanList = []
+        offset = 0
+        for token in tokens:
+            offset = text.find(token, offset)
+            if offset == -1:
+                raise RuntimeError(f"Could not find token '{token}' in original text")
+            spans.append(slice(offset, offset + len(token)))
+            offset += len(token)
+
+        tokens = [token.replace(" ", ICU_WHITESPACE_TOKEN) for token in tokens]
+        return tokens, spans
+
+class IcuDetokenizer:
+    """
+    Detokenizes tokens back into the original text preserving whitespaces as well.
+    Spans for whitespaces will be None.
+    """
+
+    # For compatibility with MosesDetokenizer interface
+    def __init__(self, lang):
+        self.lang = lang
+
+    def detokenize(self, tokens:TokenList) -> Tuple[str,TokenSpanList]:
+        text = "".join(tokens).replace(ICU_WHITESPACE_TOKEN, " ")
+
+        spans = []
+        offset = 0
+
+        for token in tokens:
+            if token == ICU_WHITESPACE_TOKEN:
+                spans.append(None)
+                continue
+            # there are some edge cases where a whitespace can appear inside a token
+            token = token.replace(ICU_WHITESPACE_TOKEN, " ")
+            offset = text.find(token, offset)
+            if offset == -1:
+                raise RuntimeError(f"Could not find token '{token}' in detokenized text")
+            spans.append(slice(offset, offset + len(token)))
+            offset += len(token)
+
+        return text, spans
