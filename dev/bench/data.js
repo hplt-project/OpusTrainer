@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1726316978845,
+  "lastUpdate": 1736764399433,
   "repoUrl": "https://github.com/hplt-project/OpusTrainer",
   "entries": {
     "Benchmark": [
@@ -740,6 +740,45 @@ window.BENCHMARK_DATA = {
           {
             "name": "Tags with SPM",
             "value": 54019069800,
+            "unit": "ns"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "jzaragoza@prompsit.com",
+            "name": "Jaume Zaragoza",
+            "username": "ZJaume"
+          },
+          "committer": {
+            "email": "noreply@github.com",
+            "name": "GitHub",
+            "username": "web-flow"
+          },
+          "distinct": true,
+          "id": "e63da95d61577a40514aeb11b75f82ff53f26571",
+          "message": "Merge pull request #61 from mozilla/icu_tokenizer\n\nAdd support for ICU tokenizer",
+          "timestamp": "2025-01-13T11:30:57+01:00",
+          "tree_id": "502eaa48572295ce2dcc04afbc479689b8593b7e",
+          "url": "https://github.com/hplt-project/OpusTrainer/commit/e63da95d61577a40514aeb11b75f82ff53f26571"
+        },
+        "date": 1736764398567,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "Baseline",
+            "value": 2377740309,
+            "unit": "ns"
+          },
+          {
+            "name": "Tags",
+            "value": 30356434122,
+            "unit": "ns"
+          },
+          {
+            "name": "Tags with SPM",
+            "value": 45211920434,
             "unit": "ns"
           }
         ]
