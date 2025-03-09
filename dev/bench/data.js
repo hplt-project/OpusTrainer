@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1741548307502,
+  "lastUpdate": 1741549086051,
   "repoUrl": "https://github.com/hplt-project/OpusTrainer",
   "entries": {
     "Benchmark": [
@@ -857,6 +857,45 @@ window.BENCHMARK_DATA = {
           {
             "name": "Tags with SPM",
             "value": 42304167930,
+            "unit": "ns"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "jzaragoza@prompsit.com",
+            "name": "Jaume Zaragoza",
+            "username": "ZJaume"
+          },
+          "committer": {
+            "email": "noreply@github.com",
+            "name": "GitHub",
+            "username": "web-flow"
+          },
+          "distinct": true,
+          "id": "04cc492ca682be386e3661c0a1303ee12e383957",
+          "message": "[GA] Fix GA again",
+          "timestamp": "2025-03-09T20:35:56+01:00",
+          "tree_id": "2e4ac8743b884290658dd99d776215b362592581",
+          "url": "https://github.com/hplt-project/OpusTrainer/commit/04cc492ca682be386e3661c0a1303ee12e383957"
+        },
+        "date": 1741549085636,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "Baseline",
+            "value": 2288164783,
+            "unit": "ns"
+          },
+          {
+            "name": "Tags",
+            "value": 27281016851,
+            "unit": "ns"
+          },
+          {
+            "name": "Tags with SPM",
+            "value": 41423692374,
             "unit": "ns"
           }
         ]
