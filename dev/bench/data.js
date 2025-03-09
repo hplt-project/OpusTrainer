@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1741548053538,
+  "lastUpdate": 1741548307502,
   "repoUrl": "https://github.com/hplt-project/OpusTrainer",
   "entries": {
     "Benchmark": [
@@ -818,6 +818,45 @@ window.BENCHMARK_DATA = {
           {
             "name": "Tags with SPM",
             "value": 41693443699,
+            "unit": "ns"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "jzaragoza@prompsit.com",
+            "name": "Jaume Zaragoza",
+            "username": "ZJaume"
+          },
+          "committer": {
+            "email": "noreply@github.com",
+            "name": "GitHub",
+            "username": "web-flow"
+          },
+          "distinct": true,
+          "id": "fcbedbbf7897108f37f27c7abee32c8bf36d5b6d",
+          "message": "Merge pull request #62 from mozilla/split_vocabs\n\nAdd support for separate source and target vocabularies",
+          "timestamp": "2025-03-09T19:22:53Z",
+          "tree_id": "e0dce85d42e75fde002bb3d8210fbcb4f91770ec",
+          "url": "https://github.com/hplt-project/OpusTrainer/commit/fcbedbbf7897108f37f27c7abee32c8bf36d5b6d"
+        },
+        "date": 1741548307060,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "Baseline",
+            "value": 2549240754,
+            "unit": "ns"
+          },
+          {
+            "name": "Tags",
+            "value": 27597453492,
+            "unit": "ns"
+          },
+          {
+            "name": "Tags with SPM",
+            "value": 42304167930,
             "unit": "ns"
           }
         ]
