@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1736764399433,
+  "lastUpdate": 1741548053538,
   "repoUrl": "https://github.com/hplt-project/OpusTrainer",
   "entries": {
     "Benchmark": [
@@ -779,6 +779,45 @@ window.BENCHMARK_DATA = {
           {
             "name": "Tags with SPM",
             "value": 45211920434,
+            "unit": "ns"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "jzaragoza@prompsit.com",
+            "name": "Jaume Zaragoza",
+            "username": "ZJaume"
+          },
+          "committer": {
+            "email": "noreply@github.com",
+            "name": "GitHub",
+            "username": "web-flow"
+          },
+          "distinct": true,
+          "id": "2f2233efe0723b823b6c4db23caf8a5306fdcdf9",
+          "message": "[GA] Update upload-artifact",
+          "timestamp": "2025-03-09T20:18:44+01:00",
+          "tree_id": "168619cd2caea925264a9c79ad2c7df567bf6a1d",
+          "url": "https://github.com/hplt-project/OpusTrainer/commit/2f2233efe0723b823b6c4db23caf8a5306fdcdf9"
+        },
+        "date": 1741548053278,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "Baseline",
+            "value": 2332688293,
+            "unit": "ns"
+          },
+          {
+            "name": "Tags",
+            "value": 27295978717,
+            "unit": "ns"
+          },
+          {
+            "name": "Tags with SPM",
+            "value": 41693443699,
             "unit": "ns"
           }
         ]
