@@ -252,7 +252,7 @@ class PlaceholderTagModifier(Modifier):
     print_alignments: bool
 
     def __init__(self, probability: float=0.0, custom_detok_src: Optional[str]=None, custom_detok_trg: Optional[str]=None,
-        spm_vocab: Optional[Path]=None,
+        spm_vocab_src: Optional[Path]=None, spm_vocab_trg: Optional[Path]=None,
         template: str="__source__ {src} __target__ {trg} __done__", augment: float=0, replace:float=0, tag:float=1):
         super().__init__(probability)
 
@@ -269,16 +269,16 @@ class PlaceholderTagModifier(Modifier):
 
         self.src_retokenizer = Retokenizer(
             detokenizer=make_detokenizer(custom_detok_src) if custom_detok_src else SpaceDetokenizer(),
-            tokenizer=SentencePieceTokenizer(spm_vocab) if spm_vocab else SpaceTokenizer()
+            tokenizer=SentencePieceTokenizer(spm_vocab_src) if spm_vocab_src else SpaceTokenizer()
         )
 
         self.trg_retokenizer = Retokenizer(
             detokenizer=make_detokenizer(custom_detok_trg) if custom_detok_trg else SpaceDetokenizer(),
-            tokenizer=SentencePieceTokenizer(spm_vocab) if spm_vocab else SpaceTokenizer()
+            tokenizer=SentencePieceTokenizer(spm_vocab_trg) if spm_vocab_trg else SpaceTokenizer()
         )
 
         # For now only print alignments when spm_vocab is passed in. We'll improve upon this with #29.
-        self.print_alignments = spm_vocab is not None
+        self.print_alignments = spm_vocab_trg is not None
 
         self.modes = []
 
