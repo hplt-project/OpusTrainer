@@ -30,6 +30,7 @@ end:
 modifiers:
   - UpperCase: 0.05
   - TitleCase: 0.05
+  - RemoveEndPunct: 0.2
   - Prefix: 0.05
     min_words: 2
     max_words: 5
