@@ -170,6 +170,15 @@ modifiers:
   unichar:       0.1 # Replaces a random consecutive repeated letter with a single letter. 
 ```
 
+#### RemoveEndPunct
+Removes terminal punctuation from the source and target sentences if it matches by type.
+For example, for en-zh it can be removed if it's `.` on the source side and `。` on the target side (but not `.` and `!`).
+
+```yaml
+modifiers:
+- RemoveEndPunct: 0.05
+```
+
 #### Merge
 Adds a modifier that merges up to `n` lines lines together. The idea is that sometimes we want to see longer sequences so that we are more robust. 
 

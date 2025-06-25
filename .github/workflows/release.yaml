@@ -18,7 +18,7 @@ jobs:
 
       - name: Run tests
         run: |-
-          pip install .
+          pip install ".[test]"
           python -m unittest discover -s tests
 
   build_sdist:

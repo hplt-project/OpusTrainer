@@ -23,6 +23,7 @@ from opustrainer.modifiers import Modifier
 from opustrainer.modifiers.merge import MergeModifier
 from opustrainer.modifiers.noise import NoiseModifier
 from opustrainer.modifiers.prefix import PrefixModifier
+from opustrainer.modifiers.punctuation import RemoveEndPunctuationModifier
 from opustrainer.modifiers.surface import UpperCaseModifier, TitleCaseModifier
 from opustrainer.modifiers.placeholders import PlaceholderTagModifier
 from opustrainer.modifiers.typos import TypoModifier
@@ -45,6 +46,7 @@ MODIFIERS = {
     'Noise': NoiseModifier,
     'UpperCase': UpperCaseModifier,
     'TitleCase': TitleCaseModifier,
+    'RemoveEndPunct': RemoveEndPunctuationModifier,
     'Tags': PlaceholderTagModifier,
     'Typos': TypoModifier,
     'Prefix': PrefixModifier,

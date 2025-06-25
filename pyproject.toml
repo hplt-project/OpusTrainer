@@ -28,6 +28,11 @@ dependencies = [
     "typo==0.1.5"
 ]
 
+[project.optional-dependencies]
+test = [
+    "parameterized==0.9.0"
+]
+
 [project.scripts]
 opustrainer-train = "opustrainer.trainer:main"
 opustrainer-shuffle = "opustrainer.shuffle:main"
