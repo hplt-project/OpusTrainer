@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1741549086051,
+  "lastUpdate": 1750864095094,
   "repoUrl": "https://github.com/hplt-project/OpusTrainer",
   "entries": {
     "Benchmark": [
@@ -896,6 +896,45 @@ window.BENCHMARK_DATA = {
           {
             "name": "Tags with SPM",
             "value": 41423692374,
+            "unit": "ns"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "jzaragoza@prompsit.com",
+            "name": "Jaume Zaragoza",
+            "username": "ZJaume"
+          },
+          "committer": {
+            "email": "noreply@github.com",
+            "name": "GitHub",
+            "username": "web-flow"
+          },
+          "distinct": true,
+          "id": "ffd62b117be2572022903a580a1dfbb9b7c0bff6",
+          "message": "Merge pull request #63 from mozilla/aug_punkt\n\nAdd punctuation removal modifier",
+          "timestamp": "2025-06-25T17:05:56+02:00",
+          "tree_id": "f67be9737c6a4d07e75e7e10f1713c43cfd45cd7",
+          "url": "https://github.com/hplt-project/OpusTrainer/commit/ffd62b117be2572022903a580a1dfbb9b7c0bff6"
+        },
+        "date": 1750864094727,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "Baseline",
+            "value": 3372531589,
+            "unit": "ns"
+          },
+          {
+            "name": "Tags",
+            "value": 27396695649,
+            "unit": "ns"
+          },
+          {
+            "name": "Tags with SPM",
+            "value": 41587100351,
             "unit": "ns"
           }
         ]
