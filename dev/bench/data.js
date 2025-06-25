@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1750864095094,
+  "lastUpdate": 1750864371348,
   "repoUrl": "https://github.com/hplt-project/OpusTrainer",
   "entries": {
     "Benchmark": [
@@ -935,6 +935,45 @@ window.BENCHMARK_DATA = {
           {
             "name": "Tags with SPM",
             "value": 41587100351,
+            "unit": "ns"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "jzaragoza@prompsit.com",
+            "name": "Jaume Zaragoza",
+            "username": "ZJaume"
+          },
+          "committer": {
+            "email": "noreply@github.com",
+            "name": "GitHub",
+            "username": "web-flow"
+          },
+          "distinct": true,
+          "id": "86a2c657440981bb79d44a3a6ffa79d072ab214e",
+          "message": "Bump version",
+          "timestamp": "2025-06-25T15:10:30Z",
+          "tree_id": "a020357dff30309ac643ec115cb6fe7ebd01aa99",
+          "url": "https://github.com/hplt-project/OpusTrainer/commit/86a2c657440981bb79d44a3a6ffa79d072ab214e"
+        },
+        "date": 1750864371000,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "Baseline",
+            "value": 3753230246,
+            "unit": "ns"
+          },
+          {
+            "name": "Tags",
+            "value": 27785342615,
+            "unit": "ns"
+          },
+          {
+            "name": "Tags with SPM",
+            "value": 42314428854,
             "unit": "ns"
           }
         ]
